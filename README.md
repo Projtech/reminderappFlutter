@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 # reminder_app_1
 
 A new Flutter project.
@@ -18,3 +19,6 @@ samples, guidance on mobile development, and a full API reference.
 =======
 # reminderFlutter.ia
 >>>>>>> d9eee4b60e55cfb301c0727c6e1d149bbea5f657
+=======
+# reminderappFlutter
+>>>>>>> 813aa7357593633faf50571417cdc3db04af896e
