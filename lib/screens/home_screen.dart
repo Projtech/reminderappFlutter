@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../screens/reminders_list.dart';
+import '../screens/add_reminder.dart'; // ADICIONADO: Import da tela de adicionar
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -110,10 +111,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 height: 56,
                 child: OutlinedButton.icon(
                   onPressed: () {
+                     // MODIFICADO: Navegar para AddReminderScreen
                      Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const RemindersListScreen(),
+                        builder: (context) => const AddReminderScreen(), // Alterado aqui
                       ),
                     );
                   },
@@ -179,3 +181,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+

@@ -19,7 +19,7 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'reminders.db');
     return await openDatabase(
       path,
-      version: 3, // ← Incrementar versão
+      version: 3, // Mantém a versão 3
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -87,8 +87,19 @@ class DatabaseHelper {
       dateTime: nextDate,
       isRecurring: reminder.isRecurring,
       recurringType: reminder.recurringType,
-      notificationsEnabled: reminder.notificationsEnabled, // ← NOVO
+      notificationsEnabled: reminder.notificationsEnabled,
     );
     return await insertReminder(nextReminder);
   }
+
+  // ADICIONADO: Método para contar lembretes por categoria
+  Future<int> getReminderCountByCategory(String categoryName) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) FROM reminders WHERE category = ?',
+      [categoryName],
+    );
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
 }
+
