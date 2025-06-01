@@ -19,9 +19,10 @@ dependencies:
   cupertino_icons: ^1.0.8
   shared_preferences: ^2.2.3
   flutter_colorpicker: ^1.1.0 # Versão especificada
-  # file_picker: ^6.2.1 # REMOVIDO TEMPORARIAMENTE PARA TESTE
+  file_picker: ^10.1.9 # Atualizado para versão mais recente
   path_provider: ^2.1.3
   permission_handler: ^11.3.1
+  flutter_timezone: ^4.0.0
 
 dev_dependencies:
   flutter_test:

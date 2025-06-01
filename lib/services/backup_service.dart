@@ -1,32 +1,68 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-// import 'package:file_picker/file_picker.dart'; // REMOVIDO TEMPORARIAMENTE
+import 'package:file_picker/file_picker.dart'; // Reativado
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:intl/intl.dart'; // ✅ Importar o DateFormat oficial
+import 'package:intl/intl.dart'; // Importar o DateFormat oficial
 import '../database/database_helper.dart';
 import '../database/category_helper.dart';
 import '../models/reminder.dart';
+// Import necessário para NotificationService se não estiver já importado globalmente
+import 'notification_service.dart';
 
 class BackupService {
   final DatabaseHelper _dbHelper = DatabaseHelper();
   final CategoryHelper _catHelper = CategoryHelper();
 
+  // Função auxiliar para mostrar SnackBar (movida para cima para melhor organização)
+  void _showSnackBar(BuildContext context, String message, Color color) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: color,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
   Future<bool> _requestStoragePermission() async {
-    // O file_picker geralmente lida com as permissões necessárias.
-    // Como foi removido, apenas retornamos true por enquanto.
-    return true;
+    // Para Android 10 (API 29) e superior, o file_picker pode não precisar de permissão explícita
+    // para salvar/ler em diretórios públicos via Storage Access Framework.
+    // No entanto, para compatibilidade com versões anteriores e acesso a diretórios específicos,
+    // manter a verificação com permission_handler é uma boa prática.
+    // O FilePicker em si pode solicitar permissões se necessário em algumas plataformas/operações.
+    // Vamos verificar a permissão de armazenamento externo.
+    // Nota: No Android 13+, as permissões de mídia (fotos, vídeos, áudio) são granulares.
+    // Se o backup pudesse conter mídia, permissões mais específicas seriam necessárias.
+    // Para um backup JSON, a permissão de armazenamento geral (ou nenhuma em alguns casos) deve bastar.
+
+    // Em versões mais recentes do Android, Permission.storage pode não ser suficiente ou aplicável.
+    // Permission.manageExternalStorage é mais abrangente, mas requer declaração especial e justificação.
+    // Vamos tentar com storage por enquanto, mas pode precisar de ajuste dependendo da versão do Android alvo.
+    var status = await Permission.storage.status;
+    if (!status.isGranted) {
+      status = await Permission.storage.request();
+    }
+
+    // Se ainda não concedida, talvez tentar photos/videos se aplicável, ou informar o usuário.
+    if (!status.isGranted) {
+       // Poderia tentar Permission.manageExternalStorage, mas é mais complexo.
+       // Ou verificar permissões de mídia se o backup incluísse isso.
+       debugPrint("Permissão de armazenamento não concedida.");
+    }
+
+    return status.isGranted;
   }
 
   Future<String?> exportBackup(BuildContext context) async {
-    _showSnackBar(context, 'Funcionalidade de Backup temporariamente desativada.', Colors.orange);
-    return null;
-    /* // CÓDIGO ORIGINAL COMENTADO
-    if (!await _requestStoragePermission()) {
-      _showSnackBar(context, 'Permissão de armazenamento negada.', Colors.red);
-      return null;
-    }
+    // // Removendo a verificação explícita de permissão - FilePicker (SAF) cuida disso.
+    // if (!await _requestStoragePermission()) {
+    //   _showSnackBar(context, 'Permissão de armazenamento negada.', Colors.red);
+    //   return null;
+    // }
 
     try {
       final reminders = await _dbHelper.getAllRemindersAsMaps();
@@ -41,106 +77,123 @@ class BackupService {
 
       final jsonString = jsonEncode(backupData);
 
-      // ✅ Usar intl.DateFormat
+      // Reativando o código do FilePicker para salvar
       String? outputFile = await FilePicker.platform.saveFile(
-        dialogTitle: 'Salvar Backup Como...',
-        fileName: 'reminder_backup_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.json',
-        type: FileType.custom,
-        allowedExtensions: ['json'],
+        dialogTitle: 'Salvar Backup Como',
+        fileName: 'lembretes_backup_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.json',
+        // type: FileType.custom, // saveFile não usa 'type' ou 'allowedExtensions' diretamente como pickFiles
+        // allowedExtensions: ['json'], // Use fileName para sugerir a extensão
+        bytes: utf8.encode(jsonString), // Passar os bytes diretamente é mais robusto para saveFile
+        // lockParentWindow: true, // Opcional: pode melhorar a experiência do usuário em desktop
       );
 
-      if (outputFile != null) {
-        if (!outputFile.toLowerCase().endsWith('.json')) {
-          outputFile += '.json';
-        }
-        final file = File(outputFile);
-        await file.writeAsString(jsonString);
-        _showSnackBar(context, 'Backup exportado com sucesso para $outputFile', Colors.green);
-        return outputFile;
-      } else {
-        _showSnackBar(context, 'Exportação cancelada.', Colors.orange);
+      if (outputFile == null) {
+        // Usuário cancelou ou falhou ao salvar (outputFile será null se não salvar)
+        _showSnackBar(context, 'Exportação cancelada ou falhou.', Colors.grey);
         return null;
       }
+
+      // O saveFile já salva o arquivo, não precisamos escrever manualmente com File(outputFile)
+      // final file = File(outputFile); // Não necessário se 'bytes' foi passado
+      // await file.writeAsString(jsonString); // Não necessário se 'bytes' foi passado
+
+      _showSnackBar(context, 'Backup exportado com sucesso!', Colors.green);
+      return outputFile; // Retorna o caminho onde foi salvo (pode ser null se falhar)
+
     } catch (e) {
       debugPrint('❌ Erro ao exportar backup: $e');
-      _showSnackBar(context, 'Erro ao exportar backup: $e', Colors.red);
+      _showSnackBar(context, 'Erro ao exportar backup: ${e.toString()}', Colors.red);
       return null;
     }
-    */
   }
 
   Future<bool> importBackup(BuildContext context) async {
-     _showSnackBar(context, 'Funcionalidade de Backup temporariamente desativada.', Colors.orange);
-     return false;
-    /* // CÓDIGO ORIGINAL COMENTADO
     try {
+      // // Removendo a verificação explícita de permissão - FilePicker (SAF) cuida disso.
+      // // Solicitar permissão antes de tentar ler (importante para pickFiles)
+      // // A permissão necessária pode variar dependendo da plataforma e versão do Android.
+      // // Vamos manter a verificação genérica de storage por enquanto.
+      // if (!await _requestStoragePermission()) {
+      //    _showSnackBar(context, 'Permissão de leitura de armazenamento negada.', Colors.red);
+      //    return false;
+      // }
+
+      // Reativando o código do FilePicker para escolher arquivo
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['json'],
+        // lockParentWindow: true, // Opcional
       );
 
-      if (result != null && result.files.single.path != null) {
-        final file = File(result.files.single.path!);
-        final jsonString = await file.readAsString();
-        final backupData = jsonDecode(jsonString) as Map<String, dynamic>;
-
-        if (backupData['version'] == null || backupData['categories'] == null || backupData['reminders'] == null) {
-          throw Exception('Arquivo de backup inválido ou corrompido.');
-        }
-
-        _showSnackBar(context, 'Importando... Limpando dados antigos...', Colors.blue);
-        await _dbHelper.deleteAllReminders();
-        await _catHelper.deleteAllCategoriesExceptDefault();
-
-        final categories = backupData['categories'] as List;
-        for (var categoryMap in categories) {
-          final name = categoryMap['name'] as String;
-          final colorHex = categoryMap['color'] as String;
-          if (name.toLowerCase() != 'geral') {
-             try {
-               await _catHelper.addCategory(name, colorHex);
-             } catch (e) {
-                debugPrint('Erro ao importar categoria $name: $e');
-             }
-          }
-        }
-
-        final reminders = backupData['reminders'] as List;
-        for (var reminderMap in reminders) {
-           try {
-             final reminder = Reminder.fromMap(reminderMap as Map<String, dynamic>);
-             // Use insertReminder (ou o nome correto do seu helper)
-             await _dbHelper.insertReminder(reminder);
-           } catch (e) {
-              debugPrint('Erro ao importar lembrete: $reminderMap - Erro: $e');
-           }
-        }
-
-        _showSnackBar(context, 'Backup importado com sucesso!', Colors.green);
-        return true;
-
-      } else {
-        _showSnackBar(context, 'Importação cancelada.', Colors.orange);
+      if (result == null || result.files.single.path == null) {
+        // Usuário cancelou ou não selecionou um arquivo válido
+        _showSnackBar(context, 'Importação cancelada ou nenhum arquivo selecionado.', Colors.grey);
         return false;
       }
+
+      // Obtendo o caminho do arquivo selecionado
+      final filePath = result.files.single.path!;
+      final file = File(filePath);
+
+      // Lendo o conteúdo do arquivo
+      final jsonString = await file.readAsString();
+      // Removendo a linha temporária: final jsonString = "";
+
+      final backupData = jsonDecode(jsonString) as Map<String, dynamic>;
+
+      // Validação básica do formato
+      if (backupData['version'] != 1 || backupData['categories'] == null || backupData['reminders'] == null) {
+        throw const FormatException('Formato de backup inválido ou não suportado.');
+      }
+
+      final categories = (backupData['categories'] as List).cast<Map<String, dynamic>>();
+      final reminders = (backupData['reminders'] as List).cast<Map<String, dynamic>>();
+
+      // Limpar dados atuais (exceto categoria 'Geral')
+      await _catHelper.deleteAllCategoriesExceptDefault();
+      await _dbHelper.deleteAllReminders();
+
+      // Importar categorias
+      for (final categoryMap in categories) {
+        if (categoryMap['name']?.toLowerCase() != 'geral') {
+           // Garantir que 'name' e 'color' não sejam nulos antes de inserir
+           final name = categoryMap['name'] as String?;
+           final color = categoryMap['color'] as String?;
+           if (name != null && color != null) {
+             await _catHelper.addCategory(name, color); // Corrigido para addCategory
+           } else {
+             debugPrint("Categoria inválida no backup (nome ou cor nulos): $categoryMap");
+           }
+        }
+      }
+
+      // Importar lembretes
+      for (final reminderMap in reminders) {
+        try {
+          final reminder = Reminder.fromMap(reminderMap);
+          await _dbHelper.insertReminder(reminder);
+           // Corrigindo a chamada para usar argumentos nomeados
+          await NotificationService.scheduleNotification(
+            id: reminder.id!, // Assumindo que id não é nulo após fromMap
+            title: reminder.title,
+            description: reminder.description,
+            scheduledDate: reminder.dateTime,
+            category: reminder.category,
+          );
+        } catch (e) {
+           debugPrint("Erro ao importar lembrete individual: $reminderMap - Erro: $e");
+           // Pode ser útil notificar o usuário sobre lembretes específicos que falharam
+        }
+      }
+
+      _showSnackBar(context, 'Backup importado com sucesso!', Colors.green);
+      return true;
+
     } catch (e) {
       debugPrint('❌ Erro ao importar backup: $e');
-      _showSnackBar(context, 'Erro ao importar backup: $e', Colors.red);
+      _showSnackBar(context, 'Erro ao importar backup: ${e.toString()}', Colors.red);
       return false;
     }
-    */
-  }
-
-  void _showSnackBar(BuildContext context, String message, Color color) {
-     if (ScaffoldMessenger.maybeOf(context) != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: color,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-     }
   }
 }
 
