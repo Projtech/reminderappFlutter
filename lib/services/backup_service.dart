@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
+// import 'package:file_picker/file_picker.dart'; // REMOVIDO TEMPORARIAMENTE
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:intl/intl.dart'; // ✅ Importar o DateFormat oficial
@@ -15,10 +15,14 @@ class BackupService {
 
   Future<bool> _requestStoragePermission() async {
     // O file_picker geralmente lida com as permissões necessárias.
+    // Como foi removido, apenas retornamos true por enquanto.
     return true;
   }
 
   Future<String?> exportBackup(BuildContext context) async {
+    _showSnackBar(context, 'Funcionalidade de Backup temporariamente desativada.', Colors.orange);
+    return null;
+    /* // CÓDIGO ORIGINAL COMENTADO
     if (!await _requestStoragePermission()) {
       _showSnackBar(context, 'Permissão de armazenamento negada.', Colors.red);
       return null;
@@ -62,9 +66,13 @@ class BackupService {
       _showSnackBar(context, 'Erro ao exportar backup: $e', Colors.red);
       return null;
     }
+    */
   }
 
   Future<bool> importBackup(BuildContext context) async {
+     _showSnackBar(context, 'Funcionalidade de Backup temporariamente desativada.', Colors.orange);
+     return false;
+    /* // CÓDIGO ORIGINAL COMENTADO
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -120,6 +128,7 @@ class BackupService {
       _showSnackBar(context, 'Erro ao importar backup: $e', Colors.red);
       return false;
     }
+    */
   }
 
   void _showSnackBar(BuildContext context, String message, Color color) {
@@ -134,6 +143,4 @@ class BackupService {
      }
   }
 }
-
-// ❌ Classe DateFormat customizada REMOVIDA
 
