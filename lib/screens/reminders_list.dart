@@ -1,15 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-// import 'package:file_picker/file_picker.dart'; // REMOVIDO - Não usado diretamente aqui
-// import 'package:permission_handler/permission_handler.dart'; // REMOVIDO - Não usado diretamente aqui
-import '../main.dart'; // Import main.dart para acessar MyApp.of(context)
-import '../models/reminder.dart';
+import 'package:flutter/services.dart';
 import '../database/database_helper.dart';
-import '../database/category_helper.dart';
+import '../models/reminder.dart';
+import '../screens/add_reminder.dart';
 import '../services/notification_service.dart';
-import '../services/backup_service.dart'; // ✅ Importar BackupService
-import 'add_reminder.dart';
-import 'manage_categories_screen.dart';
+import 'package:intl/intl.dart';
 
 class RemindersListScreen extends StatefulWidget {
   const RemindersListScreen({super.key});
@@ -20,568 +15,527 @@ class RemindersListScreen extends StatefulWidget {
 
 class _RemindersListScreenState extends State<RemindersListScreen> {
   final DatabaseHelper _databaseHelper = DatabaseHelper();
-  final CategoryHelper _categoryHelper = CategoryHelper();
-  final BackupService _backupService = BackupService(); // ✅ Instanciar BackupService
-  List<Reminder> _allReminders = []; // Lista original com todos os lembretes
-  List<Reminder> _filteredReminders = []; // Lista filtrada para exibição
-  Map<String, Color> _categoryColors = {};
-  bool _isLoading = true;
-
-  // Filtro por categoria
-  String? _selectedFilterCategory = 'Todas'; // Inicia mostrando todas
-  List<String> _filterCategories = ['Todas']; // Lista de categorias para o filtro
-
-  // Adicionado para busca
   final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
+  List<Reminder> _reminders = [];
+  List<Reminder> _filteredReminders = [];
+  bool _isLoading = true;
   bool _isSearching = false;
+  String? _selectedCategory;
+  List<String> _categories = [];
 
   @override
   void initState() {
     super.initState();
+    _loadReminders();
     _searchController.addListener(_onSearchChanged);
-    _loadData();
   }
 
   @override
   void dispose() {
-    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
   }
 
-  // Listener para o campo de busca
   void _onSearchChanged() {
-    setState(() {
-      _searchQuery = _searchController.text;
-      _filterReminders();
-    });
+    _filterReminders();
   }
 
-  // Lógica de filtragem combinada (busca e categoria)
-  void _filterReminders() {
-    List<Reminder> tempReminders = List.from(_allReminders);
-
-    // 1. Filtrar por categoria (se não for "Todas")
-    if (_selectedFilterCategory != null && _selectedFilterCategory != "Todas") {
-      tempReminders = tempReminders.where((reminder) => reminder.category == _selectedFilterCategory).toList();
-    }
-
-    // 2. Filtrar por busca (se houver query)
-    if (_searchQuery.isNotEmpty) {
-      final queryLower = _searchQuery.toLowerCase();
-      tempReminders = tempReminders.where((reminder) {
-        final titleLower = reminder.title.toLowerCase();
-        final descriptionLower = reminder.description.toLowerCase();
-        return titleLower.contains(queryLower) || descriptionLower.contains(queryLower);
-      }).toList();
-    }
-
-    // Atualiza a lista final filtrada
-    setState(() {
-      _filteredReminders = tempReminders;
-    });
-  }
-
-  Future<void> _loadData() async {
-    if (!mounted) return;
+  Future<void> _loadReminders() async {
     setState(() => _isLoading = true);
-    await _loadCategories();
-    await _loadReminders();
-    if (mounted) {
+    try {
+      final reminders = await _databaseHelper.getAllReminders();
+      final categories = <String>{};
+      
+      for (final reminder in reminders) {
+        categories.add(reminder.category);
+      }
+      
+      setState(() {
+        _reminders = reminders;
+        _categories = categories.toList()..sort();
+        _sortReminders();
+        _filterReminders();
+        _isLoading = false;
+      });
+    } catch (e) {
       setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _loadCategories() async {
-    try {
-      await _categoryHelper.ensureDefaultCategory();
-      final categories = await _categoryHelper.getAllCategories();
-      final categoryNames = categories.map((c) => c["name"] as String).toList();
-      if (mounted) {
-        setState(() {
-          _categoryColors = {};
-          _filterCategories = ["Todas", ...categoryNames]; // Atualiza lista de categorias para filtro
-          // Garante que a categoria selecionada ainda exista, senão volta para "Todas"
-          if (_selectedFilterCategory != "Todas" && !categoryNames.contains(_selectedFilterCategory)) {
-            _selectedFilterCategory = "Todas";
-          }
-          for (final category in categories) {
-            final name = category['name'] as String;
-            final colorHex = category['color'] as String;
-            try {
-              // Adiciona 'FF' para opacidade total ao parsear RRGGBB
-              _categoryColors[name] = Color(int.parse('FF$colorHex', radix: 16));
-            } catch (e) {
-              debugPrint('Erro ao parsear cor $colorHex para categoria $name: $e');
-              _categoryColors[name] = Colors.grey;
-            }
-          }
-        });
+  void _sortReminders() {
+    _reminders.sort((a, b) {
+      if (a.isCompleted != b.isCompleted) {
+        return a.isCompleted ? 1 : -1;
       }
-    } catch (e) {
-      debugPrint('❌ Erro ao carregar categorias: $e');
-    }
+      return a.dateTime.compareTo(b.dateTime);
+    });
   }
 
-  Future<void> _loadReminders() async {
-    try {
-      final reminders = await _databaseHelper.getAllReminders();
-      if (mounted) {
-        setState(() {
-          _allReminders = reminders;
-          _allReminders.sort((a, b) => a.dateTime.compareTo(b.dateTime)); // Ordena ao carregar
-          _filterReminders(); // Aplica o filtro após carregar
-        });
-      }
-    } catch (e) {
-      debugPrint('❌ Erro ao carregar lembretes: $e');
-    }
-  }
-
-  // Função para alternar a visibilidade da barra de busca
-  void _toggleSearch() {
+  void _filterReminders() {
     setState(() {
-      _isSearching = !_isSearching;
-      if (!_isSearching) {
-        _searchController.clear(); // Limpa a busca ao fechar
-      }
+      _filteredReminders = _reminders.where((reminder) {
+        final matchesSearch = _searchController.text.isEmpty ||
+            reminder.title.toLowerCase().contains(_searchController.text.toLowerCase()) ||
+            reminder.description.toLowerCase().contains(_searchController.text.toLowerCase());
+        
+        final matchesCategory = _selectedCategory == null || 
+            reminder.category == _selectedCategory;
+        
+        return matchesSearch && matchesCategory;
+      }).toList();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final appBarColor = theme.colorScheme.primary;
-    final fabColor = theme.colorScheme.secondary;
-    final iconColor = theme.colorScheme.onPrimary;
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
-      appBar: _buildAppBar(appBarColor, iconColor),
-      drawer: _buildDrawer(),
+      backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey[100],
+      appBar: AppBar(
+        backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey[100],
+        elevation: 0,
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                decoration: InputDecoration(
+                  hintText: 'Pesquisar lembretes...',
+                  hintStyle: TextStyle(
+                    color: isDark ? Colors.grey[600] : Colors.grey[500],
+                  ),
+                  border: InputBorder.none,
+                ),
+              )
+            : const Text(
+                'Lembretes',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+        actions: [
+          IconButton(
+            icon: Icon(_isSearching ? Icons.close : Icons.search),
+            onPressed: () {
+              setState(() {
+                _isSearching = !_isSearching;
+                if (!_isSearching) {
+                  _searchController.clear();
+                }
+              });
+            },
+          ),
+          if (!_isSearching)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.filter_list),
+              onSelected: (category) {
+                setState(() {
+                  _selectedCategory = category == 'all' ? null : category;
+                  _filterReminders();
+                });
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'all',
+                  child: Text('Todas as categorias'),
+                ),
+                const PopupMenuDivider(),
+                ..._categories.map((category) => PopupMenuItem(
+                  value: category,
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: _getCategoryColor(category),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(category),
+                    ],
+                  ),
+                )),
+              ],
+            ),
+        ],
+      ),
       body: Column(
         children: [
-          // Barra de busca (aparece condicionalmente)
-          if (_isSearching) _buildSearchBar(),
-          // Barra de Filtro de Categoria
-          _buildCategoryFilterBar(),
+          // Cards de estatísticas
+          Container(
+            height: 120,
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    'Hoje',
+                    _getTodayCount(),
+                    Icons.calendar_today,
+                    Colors.blue,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatCard(
+                    'Esta Semana',
+                    _getWeekCount(),
+                    Icons.date_range,
+                    Colors.orange,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatCard(
+                    'Atrasados',
+                    _getOverdueCount(),
+                    Icons.warning,
+                    Colors.red,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatCard(
+                    'Total',
+                    _getActiveCount(),
+                    Icons.archive,
+                    Colors.green,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Lista de lembretes
           Expanded(
             child: _isLoading
-                ? Center(
-                    child: CircularProgressIndicator(color: theme.colorScheme.primary),
-                  )
+                ? const Center(child: CircularProgressIndicator())
                 : _filteredReminders.isEmpty
-                    ? _buildEmptyOrNoResultsState()
-                    : _buildRemindersList(),
+                    ? _buildEmptyState()
+                    : ListView.builder(
+                        padding: const EdgeInsets.only(bottom: 80),
+                        itemCount: _filteredReminders.length,
+                        itemBuilder: (context, index) {
+                          final reminder = _filteredReminders[index];
+                          return _buildReminderItem(reminder);
+                        },
+                      ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _navigateToAddEditScreen(),
-        backgroundColor: fabColor,
-        tooltip: 'Adicionar Lembrete',
-        child: Icon(Icons.add, color: theme.colorScheme.onSecondary),
+        onPressed: _addReminder,
+        backgroundColor: Colors.blue,
+        child: const Icon(Icons.add),
       ),
     );
   }
 
-  // AppBar com lógica de busca e SEM botão de refresh
-  AppBar _buildAppBar(Color appBarColor, Color iconColor) {
-    return AppBar(
-      backgroundColor: appBarColor,
-      elevation: 1,
-      leading: Builder(
-        builder: (context) => IconButton(
-          icon: Icon(Icons.menu, color: iconColor),
-          onPressed: () => Scaffold.of(context).openDrawer(),
-        ),
-      ),
-      title: Text(
-        'Lembretes',
-        style: TextStyle(color: iconColor, fontSize: 20, fontWeight: FontWeight.w500),
-      ),
-      actions: [
-        // Ícone de busca
-        IconButton(
-          icon: Icon(_isSearching ? Icons.close : Icons.search, color: iconColor),
-          onPressed: _toggleSearch,
-          tooltip: _isSearching ? 'Fechar Busca' : 'Buscar Lembretes',
-        ),
-      ],
-    );
-  }
-
-  // Widget da barra de busca
-  Widget _buildSearchBar() {
-    final theme = Theme.of(context);
+  Widget _buildStatCard(String label, int count, IconData icon, Color color) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      color: theme.colorScheme.surfaceVariant, // Cor de fundo para destacar
-      child: TextField(
-        controller: _searchController,
-        autofocus: true,
-        decoration: InputDecoration(
-          hintText: 'Buscar por título ou descrição...',
-          hintStyle: TextStyle(color: theme.colorScheme.onSurfaceVariant.withAlpha((0.7 * 255).round())), // Corrigido de withOpacity
-          prefixIcon: Icon(Icons.search, color: theme.colorScheme.onSurfaceVariant),
-          suffixIcon: _searchQuery.isNotEmpty
-              ? IconButton(
-                  icon: Icon(Icons.clear, color: theme.colorScheme.onSurfaceVariant),
-                  onPressed: () {
-                    _searchController.clear();
-                  },
-                )
-              : null,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(30.0),
-            borderSide: BorderSide.none,
-          ),
-          filled: true,
-          fillColor: theme.colorScheme.surfaceContainerHighest,
-          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 20),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey[900] : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: color.withOpacity(0.3),
+          width: 1,
         ),
-        style: TextStyle(color: theme.colorScheme.onSurface),
       ),
-    );
-  }
-
-  // Widget da barra de filtro de categoria
-  Widget _buildCategoryFilterBar() {
-    final theme = Theme.of(context);
-    // Só mostra a barra se houver mais de uma categoria (além de "Todas")
-    if (_filterCategories.length <= 2) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      color: theme.colorScheme.surfaceContainerLowest, // Cor sutil para diferenciar
-      child: DropdownButtonFormField<String>(
-        value: _selectedFilterCategory,
-        items: _filterCategories.map((categoryName) {
-          return DropdownMenuItem<String>(
-            value: categoryName,
-            child: Text(categoryName),
-          );
-        }).toList(),
-        onChanged: (String? newValue) {
-          if (newValue != null) {
-            setState(() {
-              _selectedFilterCategory = newValue;
-              _filterReminders(); // Aplica o filtro
-            });
-          }
-        },
-        decoration: InputDecoration(
-          labelText: 'Filtrar por Categoria',
-          labelStyle: TextStyle(color: theme.colorScheme.primary),
-          prefixIcon: Icon(Icons.filter_list, color: theme.colorScheme.primary),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8.0),
-          ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        ),
-        dropdownColor: theme.colorScheme.surfaceContainerHigh,
-        style: TextStyle(color: theme.colorScheme.onSurface),
-      ),
-    );
-  }
-
-  // ✅ Drawer atualizado com opções de Backup
-  Widget _buildDrawer() {
-    final myAppState = MyApp.of(context);
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Drawer(
-      backgroundColor: colorScheme.surface,
-      child: ListView(
-        padding: EdgeInsets.zero,
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          DrawerHeader(
-            decoration: BoxDecoration(
-              color: colorScheme.primaryContainer,
-            ),
-            child: Text(
-              'Configurações',
-              style: TextStyle(
-                color: colorScheme.onPrimaryContainer,
-                fontSize: 24,
-              ),
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 8),
+          Text(
+            count.toString(),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: color,
             ),
           ),
-          ListTile(
-            leading: Icon(Icons.category_outlined, color: colorScheme.onSurfaceVariant),
-            title: Text('Gerenciar Categorias', style: TextStyle(color: colorScheme.onSurface)),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ManageCategoriesScreen()),
-              ).then((_) {
-                _loadData(); // Recarrega categorias e lembretes após gerenciar categorias
-              });
-            },
-          ),
-          ListTile(
-            leading: Icon(Icons.notifications_active_outlined, color: colorScheme.onSurfaceVariant),
-            title: Text('Permissões de Notificação', style: TextStyle(color: colorScheme.onSurface)),
-            onTap: () async {
-              Navigator.pop(context);
-              await NotificationService.openNotificationSettingsOrRequest();
-              if (mounted) {
-                 ScaffoldMessenger.of(context).showSnackBar(
-                   const SnackBar(content: Text('Tentando abrir configurações ou solicitar permissão...'), duration: Duration(seconds: 2)),
-                 );
-              }
-            },
-          ),
-          const Divider(),
-          // ✅ Opção Exportar Backup
-          ListTile(
-            leading: Icon(Icons.upload_file_outlined, color: colorScheme.onSurfaceVariant),
-            title: Text('Exportar Backup', style: TextStyle(color: colorScheme.onSurface)),
-            onTap: () async {
-              Navigator.pop(context); // Fecha o drawer
-              await _backupService.exportBackup(context);
-            },
-          ),
-          // ✅ Opção Importar Backup
-          ListTile(
-            leading: Icon(Icons.file_download_outlined, color: colorScheme.onSurfaceVariant),
-            title: Text('Importar Backup', style: TextStyle(color: colorScheme.onSurface)),
-            onTap: () async {
-              Navigator.pop(context); // Fecha o drawer
-              // Confirmação antes de importar (substitui dados atuais)
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Confirmar Importação'),
-                  content: const Text('Atenção: Importar um backup substituirá todos os lembretes e categorias atuais (exceto a categoria \'Geral\'). Deseja continuar?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('Cancelar'),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text('Importar', style: TextStyle(color: Colors.orange)),
-                    ),
-                  ],
-                ),
-              );
-
-              if (confirm == true) {
-                final success = await _backupService.importBackup(context);
-                if (success && mounted) {
-                  // Recarrega os dados na tela após importação bem-sucedida
-                  _loadData();
-                }
-              }
-            },
-          ),
-          const Divider(),
-          SwitchListTile(
-            title: Text('Modo Escuro', style: TextStyle(color: colorScheme.onSurface)),
-            secondary: Icon(
-              isDarkMode ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
-              color: colorScheme.onSurfaceVariant,
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
             ),
-            value: isDarkMode,
-            onChanged: (bool value) {
-              myAppState?.changeTheme(value ? ThemeMode.dark : ThemeMode.light);
-            },
-            activeColor: colorScheme.primary,
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
     );
   }
 
-  // Estado de vazio ou sem resultados de busca
-  Widget _buildEmptyOrNoResultsState() {
-    final theme = Theme.of(context);
-    final bool hasOriginalReminders = _allReminders.isNotEmpty;
+  Widget _buildReminderItem(Reminder reminder) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isOverdue = reminder.dateTime.isBefore(DateTime.now()) && !reminder.isCompleted;
+    
+    return Dismissible(
+      key: Key(reminder.id.toString()),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.red,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(Icons.delete, color: Colors.white),
+      ),
+      confirmDismiss: (direction) async {
+        return await _showDeleteConfirmation(reminder);
+      },
+      onDismissed: (direction) {
+        _deleteReminder(reminder);
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.grey[900] : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: reminder.isCompleted 
+                ? Colors.green.withOpacity(0.3)
+                : isOverdue 
+                    ? Colors.red.withOpacity(0.3)
+                    : Colors.transparent,
+            width: 1,
+          ),
+        ),
+        child: ListTile(
+          onTap: () => _showReminderDetails(reminder),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          title: Text(
+            reminder.title,
+            style: TextStyle(
+              fontWeight: FontWeight.w500,
+              decoration: reminder.isCompleted ? TextDecoration.lineThrough : null,
+              color: reminder.isCompleted 
+                  ? (isDark ? Colors.grey[600] : Colors.grey[500])
+                  : null,
+            ),
+          ),
+          subtitle: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _getCategoryColor(reminder.category).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  reminder.category,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: _getCategoryColor(reminder.category),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          trailing: Switch(
+            value: reminder.notificationsEnabled && !reminder.isCompleted,
+            onChanged: reminder.isCompleted ? null : (value) {
+              _toggleNotifications(reminder, value);
+            },
+            activeColor: Colors.blue,
+          ),
+        ),
+      ),
+    );
+  }
 
+  Color _getCategoryColor(String category) {
+    switch (category.toLowerCase()) {
+      case 'trabalho':
+        return Colors.blue;
+      case 'pessoal':
+        return Colors.purple;
+      case 'estudos':
+        return Colors.orange;
+      case 'saúde':
+        return Colors.green;
+      case 'finanças':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Widget _buildEmptyState() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            hasOriginalReminders ? Icons.search_off_outlined : Icons.notifications_none_outlined,
-            size: 80,
-            color: theme.colorScheme.onSurfaceVariant,
+            Icons.notifications_none,
+            size: 64,
+            color: isDark ? Colors.grey[700] : Colors.grey[400],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           Text(
-            hasOriginalReminders ? 'Nenhum resultado encontrado' : 'Nenhum lembrete por aqui',
-            style: theme.textTheme.headlineSmall?.copyWith(
-              color: theme.colorScheme.onSurface,
+            _searchController.text.isNotEmpty
+                ? 'Nenhum lembrete encontrado'
+                : 'Nenhum lembrete criado',
+            style: TextStyle(
+              fontSize: 16,
+              color: isDark ? Colors.grey[600] : Colors.grey[600],
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            hasOriginalReminders
-                ? 'Tente buscar com outros termos.'
-                : 'Toque no + para adicionar seu primeiro lembrete.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),
     );
   }
 
-  // Lista de lembretes agora usa _filteredReminders
-  Widget _buildRemindersList() {
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      itemCount: _filteredReminders.length,
-      itemBuilder: (context, index) {
-        final reminder = _filteredReminders[index];
-        return _buildDismissibleReminderCard(reminder, index);
-      },
-    );
-  }
-
-  Widget _buildDismissibleReminderCard(Reminder reminder, int index) {
-    final theme = Theme.of(context);
-    return Dismissible(
-      key: Key('reminder_${reminder.id}'),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        margin: const EdgeInsets.symmetric(vertical: 8.0),
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.errorContainer,
-          borderRadius: BorderRadius.circular(12),
+  void _showReminderDetails(Reminder reminder) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
         ),
-        alignment: Alignment.centerRight,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.delete_outline, color: theme.colorScheme.onErrorContainer, size: 32),
-            const SizedBox(height: 4),
-            Text(
-              'Excluir',
-              style: TextStyle(
-                color: theme.colorScheme.onErrorContainer,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-      ),
-      confirmDismiss: (direction) async {
-        return await _showDeleteConfirmation(reminder);
-      },
-      onDismissed: (direction) async {
-        await _deleteReminder(reminder, index);
-      },
-      child: _buildReminderCard(reminder),
-    );
-  }
-
-  Widget _buildReminderCard(Reminder reminder) {
-    final theme = Theme.of(context);
-    final cardColor = theme.cardColor;
-    final primaryTextColor = theme.colorScheme.onSurface;
-    final secondaryTextColor = theme.colorScheme.onSurfaceVariant;
-    final categoryColor = _getCategoryColor(reminder.category);
-    final categoryTextColor = categoryColor.computeLuminance() > 0.5 ? Colors.black : Colors.white;
-
-    return Card(
-      elevation: 2,
-      margin: const EdgeInsets.symmetric(vertical: 8.0),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: cardColor,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => _showReminderDetailsDialog(reminder),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.grey[900] : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+          ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Text(
                       reminder.title,
-                      style: theme.textTheme.titleMedium?.copyWith(
+                      style: const TextStyle(
+                        fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: primaryTextColor,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: categoryColor,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      reminder.category,
-                      style: TextStyle(
-                        color: categoryTextColor,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
                   ),
                 ],
               ),
-              if (reminder.description.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4.0),
-                  child: Text(
-                    reminder.description,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: secondaryTextColor,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+              const SizedBox(height: 16),
+              
+              if (reminder.description.isNotEmpty) ...[
+                Text(
+                  'Descrição',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
                   ),
                 ),
+                const SizedBox(height: 8),
+                Text(
+                  reminder.description,
+                  style: const TextStyle(fontSize: 16),
+                ),
+                const SizedBox(height: 16),
+              ],
+              
+              _buildDetailRow(
+                Icons.access_time,
+                'Data e Hora',
+                DateFormat('dd/MM/yyyy - HH:mm').format(reminder.dateTime),
+              ),
               const SizedBox(height: 12),
+              
+              _buildDetailRow(
+                Icons.category,
+                'Categoria',
+                reminder.category,
+                color: _getCategoryColor(reminder.category),
+              ),
+              const SizedBox(height: 12),
+              
+              _buildDetailRow(
+                reminder.isCompleted ? Icons.check_circle : Icons.circle_outlined,
+                'Status',
+                reminder.isCompleted ? 'Concluído' : 'Pendente',
+                color: reminder.isCompleted ? Colors.green : Colors.orange,
+              ),
+              const SizedBox(height: 12),
+              
+              _buildDetailRow(
+                Icons.notifications,
+                'Notificações',
+                reminder.notificationsEnabled ? 'Ativadas' : 'Desativadas',
+                color: reminder.notificationsEnabled ? Colors.blue : Colors.grey,
+              ),
+              
+              if (reminder.isRecurring) ...[
+                const SizedBox(height: 12),
+                _buildDetailRow(
+                  Icons.repeat,
+                  'Repetição',
+                  'Mensal',
+                  color: Colors.purple,
+                ),
+              ],
+              
+              const SizedBox(height: 24),
+              
               Row(
                 children: [
-                  Icon(Icons.schedule_outlined, size: 16, color: secondaryTextColor),
-                  const SizedBox(width: 4),
-                  Text(
-                    DateFormat('dd/MM/yyyy HH:mm', 'pt_BR').format(reminder.dateTime),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: secondaryTextColor,
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _toggleComplete(reminder);
+                      },
+                      icon: Icon(
+                        reminder.isCompleted 
+                            ? Icons.circle_outlined 
+                            : Icons.check_circle,
+                      ),
+                      label: Text(
+                        reminder.isCompleted 
+                            ? 'Reabrir' 
+                            : 'Concluir',
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: reminder.isCompleted 
+                            ? Colors.orange 
+                            : Colors.green,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
-                  if (reminder.isRecurring) ...[
-                    Icon(Icons.repeat_outlined, size: 16, color: theme.colorScheme.secondary),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Mensal', // TODO: Ajustar para mostrar tipo correto de recorrência
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.secondary,
-                        fontWeight: FontWeight.w500,
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _showDeleteConfirmation(reminder).then((confirm) {
+                          if (confirm == true) {
+                            _deleteReminder(reminder);
+                          }
+                        });
+                      },
+                      icon: const Icon(Icons.delete),
+                      label: const Text('Excluir'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
                       ),
                     ),
-                  ],
-                  const Spacer(),
-                  Icon(
-                    reminder.notificationsEnabled
-                        ? Icons.notifications_active_outlined
-                        : Icons.notifications_off_outlined,
-                    size: 18,
-                    color: reminder.notificationsEnabled
-                        ? theme.colorScheme.primary
-                        : secondaryTextColor,
                   ),
                 ],
               ),
@@ -592,317 +546,169 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
     );
   }
 
-  Future<void> _showReminderDetailsDialog(Reminder reminder) async {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final textTheme = theme.textTheme;
-    final categoryColor = _getCategoryColor(reminder.category);
-    final categoryTextColor = categoryColor.computeLuminance() > 0.5 ? Colors.black : Colors.white;
-
-    await showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        bool currentNotificationState = reminder.notificationsEnabled;
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              backgroundColor: colorScheme.surfaceContainerHigh,
-              titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-              contentPadding: const EdgeInsets.fromLTRB(0, 0, 0, 10),
-              actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 15),
-              title: Row(
-                children: [
-                  Icon(Icons.info_outline, color: colorScheme.primary, size: 26),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Detalhes do Lembrete',
-                      style: textTheme.titleLarge?.copyWith(color: colorScheme.onSurface),
-                    ),
-                  ),
-                ],
-              ),
-              content: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: ListBody(
-                  children: <Widget>[
-                    const Divider(),
-                    _buildDetailRow(Icons.title_outlined, 'Título', reminder.title, colorScheme),
-                    if (reminder.description.isNotEmpty)
-                      _buildDetailRow(Icons.description_outlined, 'Descrição', reminder.description, colorScheme),
-                    _buildDetailRow(
-                      Icons.category_outlined,
-                      'Categoria',
-                      reminder.category,
-                      colorScheme,
-                      valueWidget: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: categoryColor,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          reminder.category,
-                          style: textTheme.bodyMedium?.copyWith(color: categoryTextColor, fontWeight: FontWeight.w500),
-                        ),
-                      ),
-                    ),
-                    _buildDetailRow(
-                      Icons.calendar_today_outlined,
-                      'Data',
-                      DateFormat('EEEE, dd MMMM yyyy', 'pt_BR').format(reminder.dateTime),
-                      colorScheme,
-                    ),
-                    _buildDetailRow(
-                      Icons.access_time_outlined,
-                      'Hora',
-                      DateFormat('HH:mm', 'pt_BR').format(reminder.dateTime),
-                      colorScheme,
-                    ),
-                    if (reminder.isRecurring)
-                      _buildDetailRow(
-                        Icons.repeat_one_outlined,
-                        'Recorrência',
-                        'Mensal', // TODO: Ajustar tipo
-                        colorScheme,
-                        valueColor: colorScheme.secondary,
-                      ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: Row(
-                        children: [
-                          Icon(Icons.notifications_active_outlined, color: colorScheme.onSurfaceVariant, size: 20),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Text(
-                              'Notificações',
-                              style: textTheme.bodyLarge?.copyWith(color: colorScheme.onSurfaceVariant),
-                            ),
-                          ),
-                          Switch(
-                            value: currentNotificationState,
-                            onChanged: (bool enabled) async {
-                              setDialogState(() {
-                                currentNotificationState = enabled;
-                              });
-                              await _toggleReminderNotification(reminder, enabled);
-                            },
-                            activeColor: colorScheme.primary,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Divider(),
-                  ],
-                ),
-              ),
-              actions: <Widget>[
-                TextButton(
-                  child: Text('Fechar', style: TextStyle(color: colorScheme.secondary)),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                ),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                  label: const Text('Editar'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: colorScheme.primary,
-                    foregroundColor: colorScheme.onPrimary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    _navigateToAddEditScreen(reminderToEdit: reminder);
-                  },
-                ),
-              ],
-            );
-          },
-        );
-      },
+  Widget _buildDetailRow(IconData icon, String label, String value, {Color? color}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 20,
+          color: color ?? (isDark ? Colors.grey[400] : Colors.grey[600]),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          '$label: ',
+          style: TextStyle(
+            fontSize: 14,
+            color: isDark ? Colors.grey[400] : Colors.grey[600],
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildDetailRow(IconData icon, String label, String value, ColorScheme colorScheme, {Color? valueColor, Widget? valueWidget}) {
-    final textTheme = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: colorScheme.onSurfaceVariant, size: 20),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
-                ),
-                const SizedBox(height: 2),
-                valueWidget ?? Text(
-                  value,
-                  style: textTheme.bodyLarge?.copyWith(color: valueColor ?? colorScheme.onSurface),
-                ),
-              ],
+  int _getTodayCount() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    
+    return _reminders.where((r) {
+      final reminderDate = DateTime(
+        r.dateTime.year,
+        r.dateTime.month,
+        r.dateTime.day,
+      );
+      return !reminderDate.isBefore(today) && 
+             reminderDate.isBefore(weekFromNow) && 
+             !r.isCompleted;
+    }).length;
+  }
+
+  int _getOverdueCount() {
+    final now = DateTime.now();
+    return _reminders.where((r) => r.dateTime.isBefore(now) && !r.isCompleted).length;
+  }
+
+  int _getActiveCount() {
+    return _reminders.where((r) => !r.isCompleted).length;
+  }
+
+  Future<bool> _showDeleteConfirmation(Reminder reminder) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Excluir lembrete?'),
+        content: Text('Tem certeza que deseja excluir "${reminder.title}"?'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Excluir',
+              style: TextStyle(color: Colors.red),
             ),
           ),
         ],
       ),
-    );
+    ) ?? false;
   }
 
-  Future<void> _toggleReminderNotification(Reminder reminder, bool enabled) async {
-    if (reminder.id == null) return;
-    try {
-      final updatedReminder = reminder.copyWith(notificationsEnabled: enabled);
-      await _databaseHelper.updateReminder(updatedReminder);
-
-      if (enabled) {
-        await NotificationService.scheduleNotification(
-          id: updatedReminder.id!,
-          title: updatedReminder.title,
-          description: updatedReminder.description,
-          scheduledDate: updatedReminder.getNextOccurrence(),
-        );
-      } else {
-        await NotificationService.cancelNotification(reminder.id!);
-      }
-
-      if (mounted) {
-        setState(() {
-          final index = _allReminders.indexWhere((r) => r.id == reminder.id);
-          if (index != -1) {
-            _allReminders[index] = updatedReminder;
-            _filterReminders(); // Re-aplica filtro após alterar notificação
-          }
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Notificações ${enabled ? "ativadas" : "desativadas"} para "${reminder.title}"'),
-            duration: const Duration(seconds: 2),
-            backgroundColor: enabled ? Colors.green : Colors.orange,
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('❌ Erro ao ${enabled ? "ativar" : "desativar"} notificação: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao ${enabled ? "ativar" : "desativar"} notificação.'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  Future<bool> _showDeleteConfirmation(Reminder reminder) async {
-    final theme = Theme.of(context);
-    return await showDialog<bool>(
-          context: context,
-          builder: (BuildContext context) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              backgroundColor: theme.colorScheme.surfaceContainerHigh,
-              title: Row(
-                children: [
-                  Icon(Icons.warning_amber_rounded, color: theme.colorScheme.error, size: 26),
-                  const SizedBox(width: 12),
-                  Text('Confirmar Exclusão', style: theme.textTheme.titleLarge?.copyWith(color: theme.colorScheme.onErrorContainer)),
-                ],
-              ),
-              content: Text('Tem certeza que deseja excluir o lembrete "${reminder.title}"? Esta ação não pode ser desfeita.', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-              actions: <Widget>[
-                TextButton(
-                  child: Text('Cancelar', style: TextStyle(color: theme.colorScheme.secondary)),
-                  onPressed: () => Navigator.of(context).pop(false),
-                ),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.delete_forever_outlined, size: 18),
-                  label: const Text('Excluir'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.colorScheme.error,
-                    foregroundColor: theme.colorScheme.onError,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  onPressed: () => Navigator.of(context).pop(true),
-                ),
-              ],
-            );
-          },
-        ) ??
-        false;
-  }
-
-  Future<void> _deleteReminder(Reminder reminder, int indexInFilteredList) async {
-    if (reminder.id == null) return;
-    try {
-      await _databaseHelper.deleteReminder(reminder.id!);
-      await NotificationService.cancelNotification(reminder.id!); // Cancela notificação associada
-      if (mounted) {
-        setState(() {
-          // Remove da lista original e da filtrada
-          _allReminders.removeWhere((r) => r.id == reminder.id);
-          // A linha abaixo estava causando erro se a lista filtrada fosse diferente da original
-          // _filteredReminders.removeAt(indexInFilteredList);
-          // Em vez disso, apenas refiltramos
-          _filterReminders();
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lembrete "${reminder.title}" excluído.'), backgroundColor: Colors.redAccent),
-        );
-      }
-    } catch (e) {
-      debugPrint('❌ Erro ao excluir lembrete: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erro ao excluir lembrete.'), backgroundColor: Colors.red),
-        );
-        _loadReminders(); // Recarrega em caso de erro
-      }
-    }
-  }
-
-  void _navigateToAddEditScreen({Reminder? reminderToEdit}) async {
+  void _addReminder() async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AddReminderScreen(reminderToEdit: reminderToEdit),
+        builder: (context) => const AddReminderScreen(),
       ),
     );
-
-    if (result is Reminder && mounted) {
-      setState(() {
-        final index = _allReminders.indexWhere((r) => r.id == result.id);
-        if (index != -1) {
-          // Editando: Atualiza na lista original
-          _allReminders[index] = result;
-          if (reminderToEdit != null) { // Mostra SnackBar só na edição
-             ScaffoldMessenger.of(context).showSnackBar(
-               SnackBar(
-                 content: Text('Lembrete "${result.title}" atualizado.'),
-                 backgroundColor: Colors.blueAccent,
-                 behavior: SnackBarBehavior.floating,
-               ),
-             );
-          }
-        } else {
-          // Adicionando: Insere na lista original
-          _allReminders.insert(0, result);
-        }
-        // Ordena a lista original e reaplica o filtro
-        _allReminders.sort((a, b) => a.dateTime.compareTo(b.dateTime));
-        _filterReminders();
-      });
-    } else if (result == true) {
-       _loadReminders(); // Recarrega por segurança se retornar true
+    if (result == true) {
+      _loadReminders();
     }
   }
 
-  Color _getCategoryColor(String categoryName) {
-    return _categoryColors[categoryName] ?? Colors.grey;
+  void _deleteReminder(Reminder reminder) async {
+    await _databaseHelper.deleteReminder(reminder.id!);
+    await NotificationService.cancelNotification(reminder.id!);
+    
+    _loadReminders();
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Lembrete excluído'),
+          action: SnackBarAction(
+            label: 'Desfazer',
+            onPressed: () async {
+              await _databaseHelper.insertReminder(reminder);
+              _loadReminders();
+            },
+          ),
+        ),
+      );
+    }
+  }
+
+  void _toggleComplete(Reminder reminder) async {
+    final updated = reminder.copyWith(isCompleted: !reminder.isCompleted);
+    await _databaseHelper.updateReminder(updated);
+    
+    if (updated.isCompleted) {
+      await NotificationService.cancelNotification(reminder.id!);
+    } else if (updated.notificationsEnabled) {
+      await NotificationService.scheduleNotification(
+        id: updated.id!,
+        title: updated.title,
+        description: updated.description,
+        scheduledDate: updated.dateTime,
+        category: updated.category,
+      );
+    }
+    
+    _loadReminders();
+  }
+
+  void _toggleNotifications(Reminder reminder, bool enabled) async {
+    HapticFeedback.lightImpact();
+    
+    final updated = reminder.copyWith(notificationsEnabled: enabled);
+    await _databaseHelper.updateReminder(updated);
+    
+    if (enabled && !reminder.isCompleted) {
+      await NotificationService.scheduleNotification(
+        id: reminder.id!,
+        title: reminder.title,
+        description: reminder.description,
+        scheduledDate: reminder.dateTime,
+        category: reminder.category,
+      );
+    } else {
+      await NotificationService.cancelNotification(reminder.id!);
+    }
+    
+    _loadReminders();
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            enabled ? 'Notificações ativadas' : 'Notificações desativadas',
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 }
-
