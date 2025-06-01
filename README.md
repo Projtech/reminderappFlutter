@@ -1,6 +1,4 @@
-<<<<<<< HEAD
-<<<<<<< HEAD
-# reminder_app_1
+# reminderappFlutter
 
 A new Flutter project.
 
@@ -16,9 +14,3 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
-=======
-# reminderFlutter.ia
->>>>>>> d9eee4b60e55cfb301c0727c6e1d149bbea5f657
-=======
-# reminderappFlutter
->>>>>>> 813aa7357593633faf50571417cdc3db04af896e

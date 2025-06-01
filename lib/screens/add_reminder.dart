@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // Import para RepeatInterval
 import '../models/reminder.dart';
 import '../database/category_helper.dart';
 import '../database/database_helper.dart';
 import '../services/notification_service.dart';
-import '../screens/reminders_list.dart'; // Import para navegação
+// import '../screens/reminders_list.dart'; // REMOVIDO - unused_import
+// import 'package:flutter_colorpicker/flutter_colorpicker.dart'; // REMOVIDO - unused_import
 
 class AddReminderScreen extends StatefulWidget {
   final Reminder? reminderToEdit;
@@ -22,7 +24,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   final _formKey = GlobalKey<FormState>();
 
   String _selectedCategory = 'Adicione as categorias aqui';
-  // ✅ CORREÇÃO: Usar uma única variável DateTime para data e hora
   late DateTime _selectedDateTime;
   bool _isRecurring = false;
 
@@ -46,7 +47,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   @override
   void initState() {
     super.initState();
-    // ✅ CORREÇÃO: Inicializar _selectedDateTime
     _selectedDateTime = _isEditing ? widget.reminderToEdit!.dateTime : DateTime.now();
     _initializeScreen();
   }
@@ -63,8 +63,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     _titleController.text = reminder.title;
     _descriptionController.text = reminder.description;
     _selectedCategory = reminder.category;
-    // ✅ CORREÇÃO: _selectedDateTime já foi inicializado no initState
-    // _selectedDateTime = reminder.dateTime;
     _isRecurring = reminder.isRecurring;
   }
 
@@ -83,7 +81,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
           final categoryNames = categories.map((c) => c['name'] as String).toList();
           if (_isEditing && categoryNames.contains(widget.reminderToEdit!.category)) {
              _selectedCategory = widget.reminderToEdit!.category;
-          } else if (!categoryNames.contains(_selectedCategory)) {
+          } else if (!categoryNames.contains(_selectedCategory) || _selectedCategory == 'Adicione as categorias aqui') {
              _selectedCategory = categoryNames.first;
           }
         } else {
@@ -107,7 +105,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: colorScheme.surface, // Corrigido de background
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         backgroundColor: colorScheme.primary,
         elevation: 0,
@@ -133,7 +131,8 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     final colorScheme = theme.colorScheme;
 
     return Container(
-      color: Colors.black.withOpacity(0.5),
+      // CORREÇÃO: Usar colorScheme.scrim ou similar para overlay
+      color: colorScheme.scrim.withOpacity(0.5),
       child: Center(
         child: Container(
           margin: const EdgeInsets.all(50),
@@ -342,29 +341,40 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
 
     if (_categories.isEmpty) {
       return Text(
-        'Nenhuma categoria encontrada',
+        'Nenhuma categoria encontrada. Adicione uma clicando no +.',
         style: TextStyle(color: colorScheme.onSurfaceVariant),
       );
     }
 
     final categoryNames = _categories.map((c) => c['name'] as String).toList();
-    if (!categoryNames.contains(_selectedCategory)) {
-       _selectedCategory = categoryNames.isNotEmpty ? categoryNames.first : 'Adicione as categorias aqui';
+    // Garante que _selectedCategory seja válido ou o primeiro da lista
+    if (!categoryNames.contains(_selectedCategory) || _selectedCategory == 'Adicione as categorias aqui') {
+       _selectedCategory = categoryNames.first;
     }
 
     return DropdownButtonFormField<String>(
       value: _selectedCategory,
       style: TextStyle(color: colorScheme.onSurface),
-      dropdownColor: colorScheme.surfaceVariant,
+      // CORREÇÃO: Usar colorScheme.surfaceContainerHighest
+      dropdownColor: colorScheme.surfaceContainerHighest,
       decoration: const InputDecoration(border: InputBorder.none),
       items: _categories.map((category) {
         final name = category['name'] as String;
         final colorHex = category['color'] as String;
         Color color = Colors.grey;
         try {
+          // Tenta parsear como ARGB (padrão do Color.value)
           color = Color(int.parse(colorHex, radix: 16));
         } catch (e) {
           debugPrint('Erro ao parsear cor $colorHex para categoria $name no dropdown: $e');
+          // Tenta parsear como #RRGGBB (se for o caso)
+          try {
+             if (colorHex.startsWith('#') && colorHex.length == 7) {
+               color = Color(int.parse(colorHex.substring(1), radix: 16) + 0xFF000000);
+             }
+          } catch (e2) {
+             debugPrint('Erro ao parsear cor $colorHex como #RRGGBB: $e2');
+          }
         }
 
         return DropdownMenuItem(
@@ -426,6 +436,8 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
           Switch(
             value: _isRecurring,
             onChanged: (value) => setState(() => _isRecurring = value),
+            activeColor: colorScheme.primary,
+            inactiveTrackColor: colorScheme.onSurface.withOpacity(0.38),
           ),
         ],
       ),
@@ -472,7 +484,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                // ✅ CORREÇÃO: Usar _selectedDateTime para formatar
                 DateFormat('dd/MM/yyyy').format(_selectedDateTime),
                 style: TextStyle(
                   color: colorScheme.onPrimaryContainer,
@@ -527,7 +538,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                // ✅ CORREÇÃO: Usar _selectedDateTime para formatar
                 DateFormat('HH:mm').format(_selectedDateTime),
                 style: TextStyle(
                   color: colorScheme.onPrimaryContainer,
@@ -547,7 +557,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     final colorScheme = theme.colorScheme;
 
     return ElevatedButton.icon(
-      onPressed: _saveReminder,
+      onPressed: _isSaving ? null : _saveReminder,
       icon: Icon(Icons.save, color: colorScheme.onPrimary),
       label: Text(
         _isEditing ? 'Atualizar Lembrete' : 'Salvar Lembrete',
@@ -567,29 +577,36 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   Future<void> _selectDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      // ✅ CORREÇÃO: Usar _selectedDateTime
       initialDate: _selectedDateTime,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2101),
       builder: (context, child) {
-        final theme = Theme.of(context);
+        final currentTheme = Theme.of(context);
         return Theme(
-          data: theme.copyWith(
-            colorScheme: theme.colorScheme.copyWith(
-              primary: theme.colorScheme.primary,
-              onPrimary: theme.colorScheme.onPrimary,
-              surface: theme.colorScheme.surface,
-              onSurface: theme.colorScheme.onSurface,
+          data: currentTheme.copyWith(
+            colorScheme: currentTheme.colorScheme.copyWith(
+              primary: currentTheme.colorScheme.primary,
+              onPrimary: currentTheme.colorScheme.onPrimary,
+              surface: currentTheme.colorScheme.surface,
+              onSurface: currentTheme.colorScheme.onSurface,
             ),
-            dialogBackgroundColor: theme.dialogBackgroundColor,
+            // CORREÇÃO: Passar DialogThemeData diretamente
+            dialogTheme: currentTheme.dialogTheme.copyWith(
+              backgroundColor: currentTheme.colorScheme.surface,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: currentTheme.colorScheme.primary,
+              ),
+            ),
           ),
           child: child!,
         );
       },
     );
-    if (picked != null) {
+    if (picked != null && picked != _selectedDateTime) {
       setState(() {
-        // ✅ CORREÇÃO: Atualizar _selectedDateTime mantendo a hora
         _selectedDateTime = DateTime(
           picked.year,
           picked.month,
@@ -604,19 +621,27 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   Future<void> _selectTime() async {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
-      // ✅ CORREÇÃO: Usar _selectedDateTime
       initialTime: TimeOfDay.fromDateTime(_selectedDateTime),
       builder: (context, child) {
-        final theme = Theme.of(context);
+        final currentTheme = Theme.of(context);
         return Theme(
-          data: theme.copyWith(
-            colorScheme: theme.colorScheme.copyWith(
-              primary: theme.colorScheme.primary,
-              onPrimary: theme.colorScheme.onPrimary,
-              surface: theme.colorScheme.surface,
-              onSurface: theme.colorScheme.onSurface,
+          data: currentTheme.copyWith(
+            colorScheme: currentTheme.colorScheme.copyWith(
+              primary: currentTheme.colorScheme.primary,
+              onPrimary: currentTheme.colorScheme.onPrimary,
+              surface: currentTheme.colorScheme.surface,
+              onSurface: currentTheme.colorScheme.onSurface,
             ),
-            dialogBackgroundColor: theme.dialogBackgroundColor,
+            // CORREÇÃO: Passar DialogThemeData diretamente
+            dialogTheme: currentTheme.dialogTheme.copyWith(
+              backgroundColor: currentTheme.colorScheme.surface,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            timePickerTheme: currentTheme.timePickerTheme.copyWith(
+              backgroundColor: currentTheme.colorScheme.surface,
+              hourMinuteShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              dayPeriodShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
           ),
           child: child!,
         );
@@ -624,7 +649,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     );
     if (picked != null) {
       setState(() {
-        // ✅ CORREÇÃO: Atualizar _selectedDateTime mantendo a data
         _selectedDateTime = DateTime(
           _selectedDateTime.year,
           _selectedDateTime.month,
@@ -639,147 +663,134 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   void _showAddCategoryDialog() {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    _selectedNewCategoryColor = _predefinedColors.first;
     _newCategoryController.clear();
-    _selectedNewCategoryColor = Colors.grey;
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            backgroundColor: theme.dialogBackgroundColor,
-            title: Text('Nova Categoria', style: TextStyle(color: colorScheme.onSurface)),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: _newCategoryController,
-                    autofocus: true,
-                    maxLength: 50,
-                    decoration: InputDecoration(
-                      hintText: 'Nome da categoria',
-                      hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
-                      counterText: '',
-                      enabledBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: colorScheme.outlineVariant),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: colorScheme.surface,
+              title: Text('Nova Categoria', style: TextStyle(color: colorScheme.onSurface)),
+              content: SingleChildScrollView( // Adicionado para evitar overflow com ColorPicker
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: _newCategoryController,
+                      maxLength: 50,
+                      decoration: InputDecoration(
+                        hintText: 'Nome da categoria',
+                        counterText: '',
+                        hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                       ),
-                      focusedBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: colorScheme.primary),
-                      ),
+                      style: TextStyle(color: colorScheme.onSurface),
                     ),
-                    style: TextStyle(color: colorScheme.onSurface),
-                  ),
-                  const SizedBox(height: 20),
-                  Text('Escolha uma cor:', style: TextStyle(color: colorScheme.onSurfaceVariant)),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: _predefinedColors.map((color) {
-                      bool isSelected = _selectedNewCategoryColor == color;
-                      return GestureDetector(
-                        onTap: () {
-                          setDialogState(() {
-                            _selectedNewCategoryColor = color;
-                          });
-                        },
-                        child: Container(
-                          width: 30,
-                          height: 30,
-                          decoration: BoxDecoration(
-                            color: color,
-                            shape: BoxShape.circle,
-                            border: isSelected
-                                ? Border.all(color: colorScheme.onSurface, width: 3)
-                                : null,
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: colorScheme.primary.withOpacity(0.5),
-                                      blurRadius: 5,
-                                      spreadRadius: 1,
-                                    )
-                                  ]
-                                : [],
+                    const SizedBox(height: 20),
+                    Text('Escolha uma cor:', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: _predefinedColors.map((color) {
+                        return GestureDetector(
+                          onTap: () {
+                            setDialogState(() {
+                              _selectedNewCategoryColor = color;
+                            });
+                          },
+                          child: Container(
+                            width: 30,
+                            height: 30,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: _selectedNewCategoryColor == color
+                                    ? colorScheme.primary
+                                    : Colors.transparent,
+                                width: 3,
+                              ),
+                            ),
                           ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text('Cancelar', style: TextStyle(color: colorScheme.secondary)),
-              ),
-              TextButton(
-                onPressed: () => _addCategory(_selectedNewCategoryColor),
-                child: Text('Adicionar', style: TextStyle(color: colorScheme.primary)),
-              ),
-            ],
-          );
-        },
-      ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Cancelar', style: TextStyle(color: colorScheme.secondary)),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final name = _newCategoryController.text.trim();
+                    if (name.isNotEmpty) {
+                      Navigator.pop(context);
+                      await _addCategory(name, _selectedNewCategoryColor);
+                    } else {
+                      // TODO: Mostrar erro de nome vazio
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: colorScheme.primary),
+                  child: Text('Adicionar', style: TextStyle(color: colorScheme.onPrimary)),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
-  Future<void> _addCategory(Color selectedColor) async {
-    final categoryName = _newCategoryController.text.trim();
-    if (categoryName.isEmpty) {
-      _showMessage('Nome da categoria não pode ser vazio', Colors.orange);
-      return;
-    }
-    if (categoryName.length > 50) {
-      _showMessage('Nome da categoria muito longo (máx. 50)', Colors.orange);
-      return;
-    }
-
-    Navigator.pop(context); // Fecha o diálogo antes de tentar salvar
+  Future<void> _addCategory(String name, Color color) async {
+    if (!mounted) return;
     setState(() => _isCreatingCategory = true);
-
     try {
-      final colorHex = selectedColor.value.toRadixString(16);
-      await _categoryHelper.addCategory(categoryName, colorHex);
+      // CORREÇÃO: Usar .value que retorna int ARGB, e converter para String Hexadecimal (sem alpha)
+      String colorHex = '#${color.value.toRadixString(16).substring(2).padLeft(6, '0').toUpperCase()}';
+
+      await _categoryHelper.addCategory(name, colorHex);
       await _loadCategories();
-      setState(() {
-        _selectedCategory = categoryName;
-        _isCreatingCategory = false;
-      });
-      _showMessage('Categoria "$categoryName" adicionada', Colors.green);
-    } on ArgumentError catch (e) { // Captura erro de categoria duplicada
-       setState(() => _isCreatingCategory = false);
-      _showMessage(e.message, Colors.orange);
+      if (mounted) {
+        setState(() {
+          _selectedCategory = name;
+          _isCreatingCategory = false;
+        });
+        _showMessage('Categoria "$name" adicionada!', Colors.green);
+      }
     } catch (e) {
-      setState(() => _isCreatingCategory = false);
-      _showMessage('Erro ao adicionar categoria', Colors.red);
+      debugPrint('Erro ao adicionar categoria: $e');
+      if (mounted) {
+        setState(() => _isCreatingCategory = false);
+        _showMessage('Erro ao adicionar categoria', Colors.red);
+      }
     }
   }
 
   Future<void> _saveReminder() async {
     if (!_formKey.currentState!.validate()) {
+      _showMessage('Por favor, corrija os erros no formulário.', Colors.orange);
       return;
     }
 
-    if (_categories.isEmpty || _selectedCategory == 'Adicione as categorias aqui') {
-      _showMessage('Por favor, selecione ou adicione uma categoria', Colors.orange);
+    if (_selectedCategory == 'Adicione as categorias aqui' || _categories.where((c) => c['name'] == _selectedCategory).isEmpty) {
+      _showMessage('Por favor, selecione ou adicione uma categoria válida.', Colors.orange);
       return;
     }
 
+    if (!mounted) return;
     setState(() => _isSaving = true);
 
-    // ✅ CORREÇÃO: Usar _selectedDateTime diretamente
+    final now = DateTime.now();
     final finalDateTime = _selectedDateTime;
 
-    // Garante que a data/hora não está no passado (com pequena margem)
-    final now = DateTime.now();
-    if (finalDateTime.isBefore(now.subtract(const Duration(seconds: 10)))) {
-       // Opcional: Mostrar aviso ou ajustar para agora?
-       // Por enquanto, vamos permitir salvar datas passadas, mas a notificação não será agendada.
-       debugPrint("Aviso: Data/hora selecionada está no passado: $finalDateTime");
+    if (finalDateTime.isBefore(now)) {
+       debugPrint("Aviso: Data/hora selecionada ($finalDateTime) está no passado. Notificação não será agendada.");
     }
 
     final reminder = Reminder(
@@ -791,7 +802,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       isCompleted: _isEditing ? widget.reminderToEdit!.isCompleted : false,
       isRecurring: _isRecurring,
       recurringType: _isRecurring ? 'monthly' : null,
-      // Mantém o estado de notificação original ao editar, a menos que seja alterado no dialog da lista
       notificationsEnabled: _isEditing ? widget.reminderToEdit!.notificationsEnabled : true,
     );
 
@@ -806,16 +816,22 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
 
       if (savedId != null) {
         await NotificationService.cancelNotification(savedId);
+        // Apenas agenda se habilitado E data/hora não estiver muito no passado
         if (reminder.notificationsEnabled && finalDateTime.isAfter(now.subtract(const Duration(seconds: 5)))) {
-          // Apenas agenda se habilitado E data/hora não estiver muito no passado
           if (reminder.isRecurring) {
-            await NotificationService.scheduleRecurringNotification(
+            // A lógica de recorrência mensal precisa ser implementada corretamente.
+            // O NotificationService atual não suporta RepeatInterval.monthly.
+            // Por enquanto, agendaremos apenas a próxima ocorrência.
+            DateTime nextOccurrence = reminder.getNextOccurrence();
+            debugPrint("Agendando notificação recorrente (próxima ocorrência) para: $nextOccurrence");
+            await NotificationService.scheduleNotification(
               id: savedId,
-              title: reminder.title,
+              title: "(Recorrente) ${reminder.title}",
               description: reminder.description,
-              scheduledDate: reminder.getNextOccurrence(),
+              scheduledDate: nextOccurrence,
               category: reminder.category,
             );
+            // Nota: O app precisaria reagendar a notificação após ela disparar.
           } else {
             await NotificationService.scheduleNotification(
               id: savedId,
@@ -829,8 +845,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       }
 
       if (mounted) {
-        // Retorna o lembrete salvo/atualizado para a tela anterior
-        Navigator.pop(context, reminder);
+        Navigator.pop(context, reminder); // Retorna o lembrete salvo/atualizado
       }
 
     } catch (e) {
