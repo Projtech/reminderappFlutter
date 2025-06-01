@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // ADICIONADO: Import shared_preferences
+import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
 import 'services/notification_service.dart';
 
@@ -8,32 +8,22 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('pt_BR', null);
 
-  try {
-    await NotificationService.initialize();
-  } catch (e) {
-    debugPrint('Erro ao inicializar notificações: $e');
-  }
+  // Inicializa o serviço de notificação SEM pedir permissão ainda
+  await NotificationService.initialize();
 
-  // ADICIONADO: Carregar tema antes de rodar o app
+  // Carrega tema
   final prefs = await SharedPreferences.getInstance();
   final String? themeModeString = prefs.getString('theme_mode');
-  ThemeMode initialThemeMode;
-  if (themeModeString == 'dark') {
-    initialThemeMode = ThemeMode.dark;
-  } else {
-    initialThemeMode = ThemeMode.light; // Padrão é light
-  }
+  ThemeMode initialThemeMode = (themeModeString == 'dark') ? ThemeMode.dark : ThemeMode.light;
 
-  runApp(MyApp(initialThemeMode: initialThemeMode)); // Passar tema inicial
+  runApp(MyApp(initialThemeMode: initialThemeMode));
 }
 
 class MyApp extends StatefulWidget {
-  final ThemeMode initialThemeMode; // ADICIONADO: Receber tema inicial
-
-  const MyApp({super.key, required this.initialThemeMode}); // Modificado construtor
+  final ThemeMode initialThemeMode;
+  const MyApp({super.key, required this.initialThemeMode});
 
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-
   static _MyAppState? of(BuildContext context) => context.findAncestorStateOfType<_MyAppState>();
 
   @override
@@ -41,21 +31,32 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  late ThemeMode _themeMode; // Modificado para late
+  late ThemeMode _themeMode;
 
   @override
   void initState() {
     super.initState();
-    // ADICIONADO: Definir tema inicial recebido do main
     _themeMode = widget.initialThemeMode;
+    // ✅ Pedir permissão de notificação após o primeiro frame (opcional, pode ser na HomeScreen)
+    // WidgetsBinding.instance.addPostFrameCallback((_) {
+    //   _requestNotificationPermissionIfNeeded();
+    // });
   }
 
-  // Modificado para salvar a preferência
+  // // Função para pedir permissão (pode ser movida para HomeScreen)
+  // Future<void> _requestNotificationPermissionIfNeeded() async {
+  //   final prefs = await SharedPreferences.getInstance();
+  //   bool alreadyRequested = prefs.getBool('notification_permission_requested') ?? false;
+  //   if (!alreadyRequested) {
+  //     await NotificationService.requestPermissionsIfNeeded();
+  //     await prefs.setBool('notification_permission_requested', true);
+  //   }
+  // }
+
   Future<void> changeTheme(ThemeMode themeMode) async {
     setState(() {
       _themeMode = themeMode;
     });
-    // ADICIONADO: Salvar preferência
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('theme_mode', themeMode == ThemeMode.dark ? 'dark' : 'light');
   }
@@ -87,12 +88,10 @@ class _MyAppState extends State<MyApp> {
         brightness: Brightness.dark,
         primary: Colors.blue[300],
         secondary: Colors.tealAccent[100],
-        background: const Color(0xFF121212),
-        surface: const Color(0xFF1E1E1E),
+        surface: const Color(0xFF1E1E1E), // Usar surface
         onPrimary: Colors.black,
         onSecondary: Colors.black,
-        onBackground: Colors.white,
-        onSurface: Colors.white,
+        onSurface: Colors.white, // Usar onSurface
       ),
       cardTheme: CardThemeData(
         elevation: 1,
@@ -136,7 +135,8 @@ class _MyAppState extends State<MyApp> {
       debugShowCheckedModeBanner: false,
       theme: lightTheme,
       darkTheme: darkTheme,
-      themeMode: _themeMode, // Usa o estado atualizado
+      themeMode: _themeMode,
+      // ✅ A HomeScreen agora será responsável por pedir a permissão
       home: const HomeScreen(),
     );
   }

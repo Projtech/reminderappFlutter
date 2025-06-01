@@ -49,16 +49,45 @@ class Reminder {
     );
   }
 
+  // ✅ CORREÇÃO: Adicionado método copyWith
+  Reminder copyWith({
+    int? id,
+    String? title,
+    String? description,
+    String? category,
+    DateTime? dateTime,
+    bool? isCompleted,
+    bool? isRecurring,
+    String? recurringType,
+    bool? notificationsEnabled,
+  }) {
+    return Reminder(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      category: category ?? this.category,
+      dateTime: dateTime ?? this.dateTime,
+      isCompleted: isCompleted ?? this.isCompleted,
+      isRecurring: isRecurring ?? this.isRecurring,
+      recurringType: recurringType ?? this.recurringType,
+      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+    );
+  }
+
   DateTime getNextOccurrence() {
     if (!isRecurring || recurringType != 'monthly') return dateTime;
-    
+
     final now = DateTime.now();
     var nextDate = DateTime(dateTime.year, dateTime.month, dateTime.day, dateTime.hour, dateTime.minute);
-    
+
     while (nextDate.isBefore(now)) {
+      // Avança para o próximo mês, mantendo o dia (cuidado com meses de tamanhos diferentes)
+      // Uma lógica mais robusta seria necessária para dias como 31 em meses sem 31 dias.
+      // Simplificação: apenas adiciona um mês.
       nextDate = DateTime(nextDate.year, nextDate.month + 1, nextDate.day, nextDate.hour, nextDate.minute);
     }
-    
+
     return nextDate;
   }
 }
+

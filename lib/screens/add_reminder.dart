@@ -22,8 +22,8 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   final _formKey = GlobalKey<FormState>();
 
   String _selectedCategory = 'Adicione as categorias aqui';
-  DateTime _selectedDate = DateTime.now();
-  TimeOfDay _selectedTime = TimeOfDay.now();
+  // ✅ CORREÇÃO: Usar uma única variável DateTime para data e hora
+  late DateTime _selectedDateTime;
   bool _isRecurring = false;
 
   List<Map<String, dynamic>> _categories = [];
@@ -46,6 +46,8 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   @override
   void initState() {
     super.initState();
+    // ✅ CORREÇÃO: Inicializar _selectedDateTime
+    _selectedDateTime = _isEditing ? widget.reminderToEdit!.dateTime : DateTime.now();
     _initializeScreen();
   }
 
@@ -61,8 +63,8 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     _titleController.text = reminder.title;
     _descriptionController.text = reminder.description;
     _selectedCategory = reminder.category;
-    _selectedDate = reminder.dateTime;
-    _selectedTime = TimeOfDay.fromDateTime(reminder.dateTime);
+    // ✅ CORREÇÃO: _selectedDateTime já foi inicializado no initState
+    // _selectedDateTime = reminder.dateTime;
     _isRecurring = reminder.isRecurring;
   }
 
@@ -470,7 +472,8 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                DateFormat('dd/MM/yyyy').format(_selectedDate),
+                // ✅ CORREÇÃO: Usar _selectedDateTime para formatar
+                DateFormat('dd/MM/yyyy').format(_selectedDateTime),
                 style: TextStyle(
                   color: colorScheme.onPrimaryContainer,
                   fontWeight: FontWeight.w600,
@@ -524,7 +527,8 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                _selectedTime.format(context),
+                // ✅ CORREÇÃO: Usar _selectedDateTime para formatar
+                DateFormat('HH:mm').format(_selectedDateTime),
                 style: TextStyle(
                   color: colorScheme.onPrimaryContainer,
                   fontWeight: FontWeight.w600,
@@ -563,7 +567,8 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   Future<void> _selectDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDate,
+      // ✅ CORREÇÃO: Usar _selectedDateTime
+      initialDate: _selectedDateTime,
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
       builder: (context, child) {
@@ -582,15 +587,25 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         );
       },
     );
-    if (picked != null && picked != _selectedDate) {
-      setState(() => _selectedDate = picked);
+    if (picked != null) {
+      setState(() {
+        // ✅ CORREÇÃO: Atualizar _selectedDateTime mantendo a hora
+        _selectedDateTime = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          _selectedDateTime.hour,
+          _selectedDateTime.minute,
+        );
+      });
     }
   }
 
   Future<void> _selectTime() async {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
-      initialTime: _selectedTime,
+      // ✅ CORREÇÃO: Usar _selectedDateTime
+      initialTime: TimeOfDay.fromDateTime(_selectedDateTime),
       builder: (context, child) {
         final theme = Theme.of(context);
         return Theme(
@@ -607,8 +622,17 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         );
       },
     );
-    if (picked != null && picked != _selectedTime) {
-      setState(() => _selectedTime = picked);
+    if (picked != null) {
+      setState(() {
+        // ✅ CORREÇÃO: Atualizar _selectedDateTime mantendo a data
+        _selectedDateTime = DateTime(
+          _selectedDateTime.year,
+          _selectedDateTime.month,
+          _selectedDateTime.day,
+          picked.hour,
+          picked.minute,
+        );
+      });
     }
   }
 
@@ -747,13 +771,16 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
 
     setState(() => _isSaving = true);
 
-    final finalDateTime = DateTime(
-      _selectedDate.year,
-      _selectedDate.month,
-      _selectedDate.day,
-      _selectedTime.hour,
-      _selectedTime.minute,
-    );
+    // ✅ CORREÇÃO: Usar _selectedDateTime diretamente
+    final finalDateTime = _selectedDateTime;
+
+    // Garante que a data/hora não está no passado (com pequena margem)
+    final now = DateTime.now();
+    if (finalDateTime.isBefore(now.subtract(const Duration(seconds: 10)))) {
+       // Opcional: Mostrar aviso ou ajustar para agora?
+       // Por enquanto, vamos permitir salvar datas passadas, mas a notificação não será agendada.
+       debugPrint("Aviso: Data/hora selecionada está no passado: $finalDateTime");
+    }
 
     final reminder = Reminder(
       id: _isEditing ? widget.reminderToEdit!.id : null,
@@ -764,25 +791,26 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       isCompleted: _isEditing ? widget.reminderToEdit!.isCompleted : false,
       isRecurring: _isRecurring,
       recurringType: _isRecurring ? 'monthly' : null,
+      // Mantém o estado de notificação original ao editar, a menos que seja alterado no dialog da lista
       notificationsEnabled: _isEditing ? widget.reminderToEdit!.notificationsEnabled : true,
     );
 
     try {
+      int? savedId = reminder.id;
       if (_isEditing) {
         await _databaseHelper.updateReminder(reminder);
       } else {
-        final newId = await _databaseHelper.insertReminder(reminder);
-        reminder.id = newId;
+        savedId = await _databaseHelper.insertReminder(reminder);
+        reminder.id = savedId;
       }
 
-      if (reminder.id != null) { // Garante que temos um ID
-        // Cancela qualquer notificação antiga para este ID antes de agendar/cancelar
-        await NotificationService.cancelNotification(reminder.id!); 
-
-        if (reminder.notificationsEnabled) {
+      if (savedId != null) {
+        await NotificationService.cancelNotification(savedId);
+        if (reminder.notificationsEnabled && finalDateTime.isAfter(now.subtract(const Duration(seconds: 5)))) {
+          // Apenas agenda se habilitado E data/hora não estiver muito no passado
           if (reminder.isRecurring) {
             await NotificationService.scheduleRecurringNotification(
-              id: reminder.id!,
+              id: savedId,
               title: reminder.title,
               description: reminder.description,
               scheduledDate: reminder.getNextOccurrence(),
@@ -790,7 +818,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
             );
           } else {
             await NotificationService.scheduleNotification(
-              id: reminder.id!,
+              id: savedId,
               title: reminder.title,
               description: reminder.description,
               scheduledDate: reminder.dateTime,
@@ -798,31 +826,13 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
             );
           }
         }
-        // Se notificationsEnabled for false, a notificação já foi cancelada acima.
       }
 
-      // MODIFICADO: Navegação condicional após salvar
       if (mounted) {
-        if (_isEditing) {
-          // Editando: Pop volta para a lista
-          Navigator.pop(context, reminder);
-        } else {
-          // Criando novo: Mostra SnackBar e substitui a tela atual pela lista
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Lembrete "${reminder.title}" criado com sucesso!'),
-              backgroundColor: Colors.green,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-          // Pequeno delay para o usuário ver o SnackBar
-          await Future.delayed(const Duration(milliseconds: 500)); 
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const RemindersListScreen()),
-          );
-        }
+        // Retorna o lembrete salvo/atualizado para a tela anterior
+        Navigator.pop(context, reminder);
       }
+
     } catch (e) {
       debugPrint('❌ Erro ao salvar lembrete: $e');
       if (mounted) {

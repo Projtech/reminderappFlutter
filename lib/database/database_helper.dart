@@ -53,6 +53,7 @@ class DatabaseHelper {
 
   Future<int> insertReminder(Reminder reminder) async {
     final db = await database;
+    // Use insert instead of addReminder, as it's the standard name
     return await db.insert('reminders', reminder.toMap());
   }
 
@@ -61,6 +62,12 @@ class DatabaseHelper {
     final List<Map<String, dynamic>> maps = await db.query('reminders',
         orderBy: 'dateTime ASC');
     return List.generate(maps.length, (i) => Reminder.fromMap(maps[i]));
+  }
+
+  // ✅ ADICIONADO: Método para obter todos os lembretes como Maps (para backup)
+  Future<List<Map<String, dynamic>>> getAllRemindersAsMaps() async {
+    final db = await database;
+    return await db.query('reminders');
   }
 
   Future<int> updateReminder(Reminder reminder) async {
@@ -78,6 +85,12 @@ class DatabaseHelper {
     return await db.delete('reminders', where: 'id = ?', whereArgs: [id]);
   }
 
+  // ✅ ADICIONADO: Método para deletar todos os lembretes (para importação de backup)
+  Future<int> deleteAllReminders() async {
+    final db = await database;
+    return await db.delete('reminders');
+  }
+
   Future<int> createNextOccurrence(Reminder reminder) async {
     final nextDate = reminder.getNextOccurrence();
     final nextReminder = Reminder(
@@ -92,7 +105,6 @@ class DatabaseHelper {
     return await insertReminder(nextReminder);
   }
 
-  // ADICIONADO: Método para contar lembretes por categoria
   Future<int> getReminderCountByCategory(String categoryName) async {
     final db = await database;
     final result = await db.rawQuery(
