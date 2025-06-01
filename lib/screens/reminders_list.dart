@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:file_picker/file_picker.dart'; // Necessário para backup
-import 'package:permission_handler/permission_handler.dart'; // Necessário para backup
+// import 'package:file_picker/file_picker.dart'; // REMOVIDO - Não usado diretamente aqui
+// import 'package:permission_handler/permission_handler.dart'; // REMOVIDO - Não usado diretamente aqui
 import '../main.dart'; // Import main.dart para acessar MyApp.of(context)
 import '../models/reminder.dart';
 import '../database/database_helper.dart';
@@ -26,6 +26,10 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
   List<Reminder> _filteredReminders = []; // Lista filtrada para exibição
   Map<String, Color> _categoryColors = {};
   bool _isLoading = true;
+
+  // Filtro por categoria
+  String? _selectedFilterCategory = 'Todas'; // Inicia mostrando todas
+  List<String> _filterCategories = ['Todas']; // Lista de categorias para o filtro
 
   // Adicionado para busca
   final TextEditingController _searchController = TextEditingController();
@@ -54,18 +58,29 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
     });
   }
 
-  // Lógica de filtragem
+  // Lógica de filtragem combinada (busca e categoria)
   void _filterReminders() {
-    if (_searchQuery.isEmpty) {
-      _filteredReminders = List.from(_allReminders);
-    } else {
+    List<Reminder> tempReminders = List.from(_allReminders);
+
+    // 1. Filtrar por categoria (se não for "Todas")
+    if (_selectedFilterCategory != null && _selectedFilterCategory != "Todas") {
+      tempReminders = tempReminders.where((reminder) => reminder.category == _selectedFilterCategory).toList();
+    }
+
+    // 2. Filtrar por busca (se houver query)
+    if (_searchQuery.isNotEmpty) {
       final queryLower = _searchQuery.toLowerCase();
-      _filteredReminders = _allReminders.where((reminder) {
+      tempReminders = tempReminders.where((reminder) {
         final titleLower = reminder.title.toLowerCase();
         final descriptionLower = reminder.description.toLowerCase();
         return titleLower.contains(queryLower) || descriptionLower.contains(queryLower);
       }).toList();
     }
+
+    // Atualiza a lista final filtrada
+    setState(() {
+      _filteredReminders = tempReminders;
+    });
   }
 
   Future<void> _loadData() async {
@@ -82,9 +97,15 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
     try {
       await _categoryHelper.ensureDefaultCategory();
       final categories = await _categoryHelper.getAllCategories();
+      final categoryNames = categories.map((c) => c["name"] as String).toList();
       if (mounted) {
         setState(() {
           _categoryColors = {};
+          _filterCategories = ["Todas", ...categoryNames]; // Atualiza lista de categorias para filtro
+          // Garante que a categoria selecionada ainda exista, senão volta para "Todas"
+          if (_selectedFilterCategory != "Todas" && !categoryNames.contains(_selectedFilterCategory)) {
+            _selectedFilterCategory = "Todas";
+          }
           for (final category in categories) {
             final name = category['name'] as String;
             final colorHex = category['color'] as String;
@@ -143,6 +164,8 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
         children: [
           // Barra de busca (aparece condicionalmente)
           if (_isSearching) _buildSearchBar(),
+          // Barra de Filtro de Categoria
+          _buildCategoryFilterBar(),
           Expanded(
             child: _isLoading
                 ? Center(
@@ -200,7 +223,7 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
         autofocus: true,
         decoration: InputDecoration(
           hintText: 'Buscar por título ou descrição...',
-          hintStyle: TextStyle(color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7)),
+          hintStyle: TextStyle(color: theme.colorScheme.onSurfaceVariant.withAlpha((0.7 * 255).round())), // Corrigido de withOpacity
           prefixIcon: Icon(Icons.search, color: theme.colorScheme.onSurfaceVariant),
           suffixIcon: _searchQuery.isNotEmpty
               ? IconButton(
@@ -218,6 +241,46 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
           fillColor: theme.colorScheme.surfaceContainerHighest,
           contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 20),
         ),
+        style: TextStyle(color: theme.colorScheme.onSurface),
+      ),
+    );
+  }
+
+  // Widget da barra de filtro de categoria
+  Widget _buildCategoryFilterBar() {
+    final theme = Theme.of(context);
+    // Só mostra a barra se houver mais de uma categoria (além de "Todas")
+    if (_filterCategories.length <= 2) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      color: theme.colorScheme.surfaceContainerLowest, // Cor sutil para diferenciar
+      child: DropdownButtonFormField<String>(
+        value: _selectedFilterCategory,
+        items: _filterCategories.map((categoryName) {
+          return DropdownMenuItem<String>(
+            value: categoryName,
+            child: Text(categoryName),
+          );
+        }).toList(),
+        onChanged: (String? newValue) {
+          if (newValue != null) {
+            setState(() {
+              _selectedFilterCategory = newValue;
+              _filterReminders(); // Aplica o filtro
+            });
+          }
+        },
+        decoration: InputDecoration(
+          labelText: 'Filtrar por Categoria',
+          labelStyle: TextStyle(color: theme.colorScheme.primary),
+          prefixIcon: Icon(Icons.filter_list, color: theme.colorScheme.primary),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8.0),
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        ),
+        dropdownColor: theme.colorScheme.surfaceContainerHigh,
         style: TextStyle(color: theme.colorScheme.onSurface),
       ),
     );

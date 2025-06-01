@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart'; // Reativado
-import 'package:path_provider/path_provider.dart';
+// import 'package:path_provider/path_provider.dart'; // REMOVIDO - Não usado
 import 'package:permission_handler/permission_handler.dart';
 import 'package:intl/intl.dart'; // Importar o DateFormat oficial
 import '../database/database_helper.dart';
@@ -28,40 +28,17 @@ class BackupService {
     }
   }
 
-  Future<bool> _requestStoragePermission() async {
-    // Para Android 10 (API 29) e superior, o file_picker pode não precisar de permissão explícita
-    // para salvar/ler em diretórios públicos via Storage Access Framework.
-    // No entanto, para compatibilidade com versões anteriores e acesso a diretórios específicos,
-    // manter a verificação com permission_handler é uma boa prática.
-    // O FilePicker em si pode solicitar permissões se necessário em algumas plataformas/operações.
-    // Vamos verificar a permissão de armazenamento externo.
-    // Nota: No Android 13+, as permissões de mídia (fotos, vídeos, áudio) são granulares.
-    // Se o backup pudesse conter mídia, permissões mais específicas seriam necessárias.
-    // Para um backup JSON, a permissão de armazenamento geral (ou nenhuma em alguns casos) deve bastar.
-
-    // Em versões mais recentes do Android, Permission.storage pode não ser suficiente ou aplicável.
-    // Permission.manageExternalStorage é mais abrangente, mas requer declaração especial e justificação.
-    // Vamos tentar com storage por enquanto, mas pode precisar de ajuste dependendo da versão do Android alvo.
-    var status = await Permission.storage.status;
-    if (!status.isGranted) {
-      status = await Permission.storage.request();
-    }
-
-    // Se ainda não concedida, talvez tentar photos/videos se aplicável, ou informar o usuário.
-    if (!status.isGranted) {
-       // Poderia tentar Permission.manageExternalStorage, mas é mais complexo.
-       // Ou verificar permissões de mídia se o backup incluísse isso.
-       debugPrint("Permissão de armazenamento não concedida.");
-    }
-
-    return status.isGranted;
-  }
+  // // Função _requestStoragePermission removida pois não é mais necessária com FilePicker/SAF
+  // Future<bool> _requestStoragePermission() async {
+  //   ...
+  // }
 
   Future<String?> exportBackup(BuildContext context) async {
     // // Removendo a verificação explícita de permissão - FilePicker (SAF) cuida disso.
     // if (!await _requestStoragePermission()) {
-    //   _showSnackBar(context, 'Permissão de armazenamento negada.', Colors.red);
-    //   return null;
+    //      // if (mounted) // REMOVIDO - mounted não existe em Service
+      _showSnackBar(context, 'Permissão de armazenamento negada.', Colors.red);
+      return null;
     // }
 
     try {
@@ -89,19 +66,22 @@ class BackupService {
 
       if (outputFile == null) {
         // Usuário cancelou ou falhou ao salvar (outputFile será null se não salvar)
-        _showSnackBar(context, 'Exportação cancelada ou falhou.', Colors.grey);
-        return null;
+      // if (mounted) // REMOVIDO - mounted não existe em Service
+      _showSnackBar(context, 'Exportação cancelada ou falhou.', Colors.grey);
+      return null;
       }
 
       // O saveFile já salva o arquivo, não precisamos escrever manualmente com File(outputFile)
       // final file = File(outputFile); // Não necessário se 'bytes' foi passado
       // await file.writeAsString(jsonString); // Não necessário se 'bytes' foi passado
 
+      // if (mounted) // REMOVIDO - mounted não existe em Service
       _showSnackBar(context, 'Backup exportado com sucesso!', Colors.green);
       return outputFile; // Retorna o caminho onde foi salvo (pode ser null se falhar)
 
     } catch (e) {
       debugPrint('❌ Erro ao exportar backup: $e');
+      // if (mounted) // REMOVIDO - mounted não existe em Service
       _showSnackBar(context, 'Erro ao exportar backup: ${e.toString()}', Colors.red);
       return null;
     }
@@ -114,8 +94,9 @@ class BackupService {
       // // A permissão necessária pode variar dependendo da plataforma e versão do Android.
       // // Vamos manter a verificação genérica de storage por enquanto.
       // if (!await _requestStoragePermission()) {
-      //    _showSnackBar(context, 'Permissão de leitura de armazenamento negada.', Colors.red);
-      //    return false;
+          // if (mounted) // REMOVIDO - mounted não existe em Service
+      _showSnackBar(context, 'Permissão de leitura de armazenamento negada.', Colors.red);
+      return false;
       // }
 
       // Reativando o código do FilePicker para escolher arquivo
@@ -127,6 +108,7 @@ class BackupService {
 
       if (result == null || result.files.single.path == null) {
         // Usuário cancelou ou não selecionou um arquivo válido
+        // if (mounted) // REMOVIDO - mounted não existe em Service
         _showSnackBar(context, 'Importação cancelada ou nenhum arquivo selecionado.', Colors.grey);
         return false;
       }
@@ -186,11 +168,13 @@ class BackupService {
         }
       }
 
+      // if (mounted) // REMOVIDO - mounted não existe em Service
       _showSnackBar(context, 'Backup importado com sucesso!', Colors.green);
       return true;
 
     } catch (e) {
       debugPrint('❌ Erro ao importar backup: $e');
+      // if (mounted) // REMOVIDO - mounted não existe em Service
       _showSnackBar(context, 'Erro ao importar backup: ${e.toString()}', Colors.red);
       return false;
     }

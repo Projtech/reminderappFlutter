@@ -107,7 +107,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: colorScheme.background,
+      backgroundColor: colorScheme.surface, // Corrigido de background
       appBar: AppBar(
         backgroundColor: colorScheme.primary,
         elevation: 0,

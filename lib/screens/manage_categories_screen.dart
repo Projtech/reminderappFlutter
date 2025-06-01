@@ -52,18 +52,23 @@ class _ManageCategoriesScreenState extends State<ManageCategoriesScreen> {
 
   Future<void> _deleteCategory(int categoryId, String categoryName) async {
     if (_categories.length <= 1) {
-      _showMessage('Não é possível excluir a última categoria.', Colors.orange);
+        if (mounted) _showMessage(
+            'Não é possível excluir a última categoria.', Colors.orange);
       return;
     }
 
     try {
       final reminderCount = await _databaseHelper.getReminderCountByCategory(categoryName);
       if (reminderCount > 0) {
-        _showMessage('Não é possível excluir: existem $reminderCount lembrete(s) nesta categoria.', Colors.orange);
+        // BUG FIX: Add mounted check before showing SnackBar across async gap
+        if (mounted) _showMessage(
+            'Não é possível excluir: existem $reminderCount lembrete(s) nesta categoria.', Colors.orange);
         return;
       }
     } catch (e) {
-      _showMessage('Erro ao verificar lembretes associados.', Colors.red);
+      // BUG FIX: Add mounted check before showing SnackBar across async gap
+      if (mounted) _showMessage(
+          'Erro ao verificar lembretes associados.', Colors.red);
       return;
     }
 
@@ -260,7 +265,7 @@ class _ManageCategoriesScreenState extends State<ManageCategoriesScreen> {
                           decoration: BoxDecoration(
                             color: color,
                             shape: BoxShape.circle,
-                            border: Border.all(color: theme.dividerColor.withOpacity(0.5), width: 1),
+                            border: Border.all(color: theme.dividerColor.withAlpha((0.5 * 255).round()), width: 1), // Corrigido de withOpacity
                           ),
                         ),
                         title: Text(categoryName, style: TextStyle(color: colorScheme.onSurface)),
@@ -272,7 +277,7 @@ class _ManageCategoriesScreenState extends State<ManageCategoriesScreen> {
                               )
                             : Tooltip( // Adiciona tooltip para 'Geral'
                                 message: 'Categoria padrão não pode ser excluída',
-                                child: Icon(Icons.lock_outline, color: colorScheme.onSurfaceVariant.withOpacity(0.5)),
+                                child: Icon(Icons.lock_outline, color: colorScheme.onSurfaceVariant.withAlpha((0.5 * 255).round())), // Corrigido de withOpacity
                               ),
                       ),
                     );

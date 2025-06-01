@@ -115,7 +115,7 @@ class _MyAppState extends State<MyApp> {
         }),
         trackColor: WidgetStateProperty.resolveWith<Color?>((Set<WidgetState> states) {
           if (states.contains(WidgetState.selected)) {
-            return Colors.blue[300]?.withOpacity(0.5);
+            return Colors.blue[300]?.withAlpha(128); // Corrigido de withOpacity(0.5)
           }
           return null;
         }),
