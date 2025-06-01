@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+// REMOVIDO: import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import '../models/reminder.dart';
 import '../database/category_helper.dart';
-
+import '../database/database_helper.dart'; // ADICIONADO: Import DatabaseHelper
 
 class AddReminderScreen extends StatefulWidget {
   final Reminder? reminderToEdit;
-  
+
   const AddReminderScreen({super.key, this.reminderToEdit});
 
   @override
@@ -18,14 +19,15 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   final _descriptionController = TextEditingController();
   final _newCategoryController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  
+
   String _selectedCategory = 'Adicione as categorias aqui';
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = TimeOfDay.now();
   bool _isRecurring = false;
-  
+
   List<Map<String, dynamic>> _categories = [];
   final CategoryHelper _categoryHelper = CategoryHelper();
+  final DatabaseHelper _databaseHelper = DatabaseHelper(); // ADICIONADO: Instância do DatabaseHelper
 
   bool _isLoadingCategories = true;
   bool _isSaving = false;
@@ -41,7 +43,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
 
   Future<void> _initializeScreen() async {
     await _loadCategories();
-    
     if (_isEditing) {
       _populateEditingData();
     }
@@ -59,59 +60,56 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
 
   Future<void> _loadCategories() async {
     if (!mounted) return;
-    
     setState(() => _isLoadingCategories = true);
-    
     try {
       await _categoryHelper.ensureDefaultCategory();
       await Future.delayed(const Duration(milliseconds: 100));
-      
       final categories = await _categoryHelper.getAllCategories();
-      
       if (!mounted) return;
-      
       setState(() {
         _categories = categories;
         _isLoadingCategories = false;
-        
         if (categories.isNotEmpty) {
           final categoryNames = categories.map((c) => c['name'] as String).toList();
-          if (!categoryNames.contains(_selectedCategory)) {
+          // Se estiver editando e a categoria existir, mantém. Senão, seleciona a primeira.
+          if (_isEditing && categoryNames.contains(widget.reminderToEdit!.category)) {
+             _selectedCategory = widget.reminderToEdit!.category;
+          } else if (!categoryNames.contains(_selectedCategory)) {
             _selectedCategory = categoryNames.first;
           }
         } else {
           _selectedCategory = 'Adicione as categorias aqui';
         }
       });
-      
     } catch (e) {
       if (!mounted) return;
-      
       setState(() {
         _isLoadingCategories = false;
         _categories = [];
         _selectedCategory = 'Adicione as categorias aqui';
       });
-      
       _showMessage('Erro ao carregar categorias', Colors.red);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF1E88E5),
+      backgroundColor: colorScheme.background,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: colorScheme.primary,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: colorScheme.onPrimary),
           onPressed: _isSaving ? null : () => Navigator.pop(context),
         ),
         title: Text(
           _isEditing ? 'Editar Lembrete' : 'Novo Lembrete',
-          style: const TextStyle(
-            color: Colors.white, 
+          style: TextStyle(
+            color: colorScheme.onPrimary,
             fontSize: 20,
             fontWeight: FontWeight.w500,
           ),
@@ -122,24 +120,27 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   }
 
   Widget _buildLoadingOverlay() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Container(
-      color: Colors.black.withOpacity(0.5), // ✅ CORRIGIDO
+      color: Colors.black.withOpacity(0.5),
       child: Center(
         child: Container(
           margin: const EdgeInsets.all(50),
           padding: const EdgeInsets.all(30),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: colorScheme.surface,
             borderRadius: BorderRadius.circular(15),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const CircularProgressIndicator(color: Colors.teal),
+              CircularProgressIndicator(color: colorScheme.primary),
               const SizedBox(height: 20),
               Text(
                 _isEditing ? 'Atualizando lembrete...' : 'Salvando lembrete...',
-                style: const TextStyle(fontSize: 16),
+                style: TextStyle(fontSize: 16, color: colorScheme.onSurface),
               ),
             ],
           ),
@@ -174,11 +175,10 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                 border: InputBorder.none,
                 counterText: '',
               ),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
             ),
           ),
-          
           const SizedBox(height: 16),
-          
           _buildSimpleCard(
             icon: Icons.description,
             title: 'Descrição',
@@ -197,27 +197,18 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                 border: InputBorder.none,
                 counterText: '',
               ),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
             ),
           ),
-          
           const SizedBox(height: 16),
-          
           _buildCategoryCard(),
-          
           const SizedBox(height: 16),
-          
           _buildRecurringCard(),
-          
           const SizedBox(height: 16),
-          
           _buildDateCard(),
-          
           const SizedBox(height: 16),
-          
           _buildTimeCard(),
-          
           const SizedBox(height: 24),
-          
           _buildSaveButton(),
         ],
       ),
@@ -229,14 +220,17 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     required String title,
     required Widget child,
   }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95), // ✅ CORRIGIDO
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05), // ✅ CORRIGIDO
+            color: theme.shadowColor.withOpacity(0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -247,13 +241,13 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         children: [
           Row(
             children: [
-              Icon(icon, color: Colors.teal, size: 20),
+              Icon(icon, color: colorScheme.primary, size: 20),
               const SizedBox(width: 8),
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: colorScheme.onSurface,
                   fontSize: 14,
                 ),
               ),
@@ -267,14 +261,17 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   }
 
   Widget _buildCategoryCard() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95), // ✅ CORRIGIDO
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05), // ✅ CORRIGIDO
+            color: theme.shadowColor.withOpacity(0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -285,72 +282,78 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.category, color: Colors.teal, size: 20),
+              Icon(Icons.category, color: colorScheme.primary, size: 20),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'Categoria',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: colorScheme.onSurface,
                   fontSize: 14,
                 ),
               ),
               const Spacer(),
               if (_isCreatingCategory)
-                const SizedBox(
+                SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: colorScheme.primary),
                 )
               else
                 IconButton(
                   onPressed: _showAddCategoryDialog,
-                  icon: const Icon(Icons.add, color: Colors.teal),
+                  icon: Icon(Icons.add, color: colorScheme.primary),
                   iconSize: 20,
                 ),
             ],
           ),
           const SizedBox(height: 12),
-          _isLoadingCategories 
-            ? const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      CircularProgressIndicator(color: Colors.teal),
-                      SizedBox(height: 8),
-                      Text('Carregando categorias...'),
-                    ],
+          _isLoadingCategories
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      children: [
+                        CircularProgressIndicator(color: colorScheme.primary),
+                        const SizedBox(height: 8),
+                        Text('Carregando categorias...', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                      ],
+                    ),
                   ),
-                ),
-              )
-            : _buildCategoryDropdown(),
+                )
+              : _buildCategoryDropdown(),
         ],
       ),
     );
   }
 
   Widget _buildCategoryDropdown() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     if (_categories.isEmpty) {
-      return const Text(
+      return Text(
         'Nenhuma categoria encontrada',
-        style: TextStyle(color: Colors.grey),
+        style: TextStyle(color: colorScheme.onSurfaceVariant),
       );
     }
 
+    // Garante que _selectedCategory seja um valor válido na lista
     final categoryNames = _categories.map((c) => c['name'] as String).toList();
     if (!categoryNames.contains(_selectedCategory)) {
-      _selectedCategory = categoryNames.first;
+       _selectedCategory = categoryNames.isNotEmpty ? categoryNames.first : 'Adicione as categorias aqui';
     }
 
     return DropdownButtonFormField<String>(
       value: _selectedCategory,
+      style: TextStyle(color: colorScheme.onSurface),
+      dropdownColor: colorScheme.surfaceVariant,
       decoration: const InputDecoration(border: InputBorder.none),
       items: _categories.map((category) {
         final name = category['name'] as String;
         final colorHex = category['color'] as String;
         final color = Color(int.parse(colorHex));
-        
+
         return DropdownMenuItem(
           value: name,
           child: Row(
@@ -378,14 +381,17 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   }
 
   Widget _buildRecurringCard() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95), // ✅ CORRIGIDO
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05), // ✅ CORRIGIDO
+            color: theme.shadowColor.withOpacity(0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -393,13 +399,13 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.repeat, color: Colors.teal, size: 20),
+          Icon(Icons.repeat, color: colorScheme.primary, size: 20),
           const SizedBox(width: 8),
-          const Text(
+          Text(
             'Repetir Mensalmente',
             style: TextStyle(
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: colorScheme.onSurface,
               fontSize: 14,
             ),
           ),
@@ -407,7 +413,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
           Switch(
             value: _isRecurring,
             onChanged: (value) => setState(() => _isRecurring = value),
-            activeColor: Colors.teal,
           ),
         ],
       ),
@@ -415,14 +420,17 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   }
 
   Widget _buildDateCard() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95), // ✅ CORRIGIDO
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05), // ✅ CORRIGIDO
+            color: theme.shadowColor.withOpacity(0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -430,13 +438,13 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.calendar_today, color: Colors.teal, size: 20),
+          Icon(Icons.calendar_today, color: colorScheme.primary, size: 20),
           const SizedBox(width: 8),
-          const Text(
+          Text(
             'Data',
             style: TextStyle(
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: colorScheme.onSurface,
               fontSize: 14,
             ),
           ),
@@ -447,13 +455,13 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.teal.withOpacity(0.1), // ✅ CORRIGIDO
+                color: colorScheme.primaryContainer,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 DateFormat('dd/MM/yyyy').format(_selectedDate),
-                style: const TextStyle(
-                  color: Colors.teal,
+                style: TextStyle(
+                  color: colorScheme.onPrimaryContainer,
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
                 ),
@@ -466,14 +474,17 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   }
 
   Widget _buildTimeCard() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95), // ✅ CORRIGIDO
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05), // ✅ CORRIGIDO
+            color: theme.shadowColor.withOpacity(0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -481,13 +492,13 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.access_time, color: Colors.teal, size: 20),
+          Icon(Icons.access_time, color: colorScheme.primary, size: 20),
           const SizedBox(width: 8),
-          const Text(
+          Text(
             'Horário',
             style: TextStyle(
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: colorScheme.onSurface,
               fontSize: 14,
             ),
           ),
@@ -498,13 +509,13 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.teal.withOpacity(0.1), // ✅ CORRIGIDO
+                color: colorScheme.primaryContainer,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 _selectedTime.format(context),
-                style: const TextStyle(
-                  color: Colors.teal,
+                style: TextStyle(
+                  color: colorScheme.onPrimaryContainer,
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
                 ),
@@ -516,200 +527,238 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     );
   }
 
-Widget _buildSaveButton() {
-  return SizedBox(
-    width: double.infinity,
-    height: 50,
-    child: ElevatedButton.icon(
-      onPressed: _isSaving ? null : _saveReminder,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-      icon: Icon(_isEditing ? Icons.update : Icons.save),
-      label: Text(
-        _isEditing ? 'Atualizar Lembrete' : 'Salvar Lembrete',
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-      ),
-    ),
-  );
-}
+  Widget _buildSaveButton() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
-  void _showAddCategoryDialog() {
-    Color selectedColor = Colors.blue;
-    _newCategoryController.clear();
-    
-    showDialog(
-      context: context,
-      builder: (BuildContext dialogContext) => AlertDialog(
-        title: const Text('Nova Categoria'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _newCategoryController,
-              maxLength: 30,
-              decoration: const InputDecoration(
-                labelText: 'Nome da categoria',
-                border: OutlineInputBorder(),
-                counterText: '',
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text('Escolha uma cor:'),
-            const SizedBox(height: 8),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  Colors.blue, Colors.green, Colors.red, Colors.orange,
-                  Colors.purple, Colors.pink, Colors.cyan, Colors.amber,
-                ].map((color) => Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() => selectedColor = color);
-                      Navigator.of(dialogContext).pop();
-                      _createCategory(selectedColor);
-                    },
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                    ),
-                  ),
-                )).toList(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              _newCategoryController.clear();
-              Navigator.of(dialogContext).pop();
-            },
-            child: const Text('Cancelar'),
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: ElevatedButton.icon(
+        onPressed: _isSaving ? null : _saveReminder,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: colorScheme.primary,
+          foregroundColor: colorScheme.onPrimary,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
-        ],
+        ),
+        icon: Icon(_isEditing ? Icons.update : Icons.save),
+        label: Text(
+          _isEditing ? 'Atualizar Lembrete' : 'Salvar Lembrete',
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
       ),
     );
   }
 
-  Future<void> _createCategory(Color selectedColor) async {
-    final name = _newCategoryController.text.trim();
-    
-    if (name.isEmpty) {
-      _showMessage('Digite o nome da categoria', Colors.red);
-      return;
-    }
-
-    setState(() => _isCreatingCategory = true);
-
-    try {
-      final result = await _categoryHelper.insertCategory(
-        name,
-        '0x${selectedColor.toARGB32().toRadixString(16).toUpperCase()}',
-      );
-      
-      if (!mounted) return;
-      
-      setState(() => _isCreatingCategory = false);
-      
-      if (result != -1) {
-        await _loadCategories();
-        setState(() => _selectedCategory = name);
-        _newCategoryController.clear();
-        _showMessage('Categoria "$name" criada!', Colors.green);
-      } else {
-        _showMessage('Categoria já existe!', Colors.red);
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isCreatingCategory = false);
-        _showMessage('Erro ao criar categoria', Colors.red);
-      }
-    }
-  }
+  // --- Funções Auxiliares (Seleção de Data/Hora, Salvar, Categoria) ---
 
   Future<void> _selectDate() async {
-    try {
-      final DateTime? picked = await showDatePicker(
-        context: context,
-        initialDate: _selectedDate,
-        firstDate: DateTime.now(),
-        lastDate: DateTime(2030, 12, 31),
-      );
-      
-      if (picked != null && picked != _selectedDate) {
-        setState(() => _selectedDate = picked);
-      }
-    } catch (e) {
-      _showMessage('Erro ao selecionar data', Colors.red);
+    final theme = Theme.of(context);
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 30)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+      builder: (context, child) {
+        return Theme(
+          data: theme.copyWith(
+            colorScheme: theme.colorScheme.copyWith(
+              primary: theme.colorScheme.primary,
+              onPrimary: theme.colorScheme.onPrimary,
+              surface: theme.colorScheme.surface,
+              onSurface: theme.colorScheme.onSurface,
+            ),
+            dialogBackgroundColor: theme.dialogBackgroundColor,
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked;
+      });
     }
   }
 
   Future<void> _selectTime() async {
+    final theme = Theme.of(context);
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _selectedTime,
+      builder: (context, child) {
+        return Theme(
+          data: theme.copyWith(
+             timePickerTheme: TimePickerThemeData(
+               backgroundColor: theme.dialogBackgroundColor,
+               hourMinuteTextColor: theme.colorScheme.onSurface,
+               hourMinuteColor: theme.colorScheme.surfaceVariant,
+               dayPeriodTextColor: theme.colorScheme.onSurface,
+               dayPeriodColor: theme.colorScheme.surfaceVariant,
+               dialHandColor: theme.colorScheme.primary,
+               dialBackgroundColor: theme.colorScheme.surfaceVariant,
+               dialTextColor: theme.colorScheme.onSurface,
+               entryModeIconColor: theme.colorScheme.primary,
+               helpTextStyle: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+             ),
+             textButtonTheme: TextButtonThemeData(
+               style: TextButton.styleFrom(foregroundColor: theme.colorScheme.primary),
+             ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null && picked != _selectedTime) {
+      setState(() {
+        _selectedTime = picked;
+      });
+    }
+  }
+
+  void _showAddCategoryDialog() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    // REMOVIDO: Color selectedColor = colorScheme.primary;
+    _newCategoryController.clear();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          backgroundColor: theme.dialogBackgroundColor,
+          title: Text('Nova Categoria', style: TextStyle(color: colorScheme.onSurface)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: _newCategoryController,
+                  maxLength: 50,
+                  style: TextStyle(color: colorScheme.onSurface),
+                  decoration: InputDecoration(
+                    hintText: 'Nome da categoria',
+                    hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                    counterText: '',
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.primary),
+                    ),
+                  ),
+                ),
+                // REMOVIDO: Seção de seleção de cor com BlockPicker
+                // const SizedBox(height: 20),
+                // const Text('Escolha uma cor:', style: TextStyle(fontSize: 16)),
+                // const SizedBox(height: 10),
+                // BlockPicker(...),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text('Cancelar', style: TextStyle(color: colorScheme.primary)),
+            ),
+            TextButton(
+              onPressed: () async {
+                final categoryName = _newCategoryController.text.trim();
+                if (categoryName.isNotEmpty) {
+                  Navigator.of(dialogContext).pop();
+                  // CORREÇÃO: Usar uma cor padrão (ex: Colors.grey) ou gerar uma aleatória simples
+                  final defaultColor = Colors.grey; // Ou outra cor padrão
+                  await _createCategory(categoryName, defaultColor);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Digite um nome para a categoria.'),
+                      backgroundColor: Colors.orange,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              },
+              child: Text('Adicionar', style: TextStyle(color: colorScheme.primary)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _createCategory(String name, Color color) async {
+    if (!mounted) return;
+    setState(() => _isCreatingCategory = true);
     try {
-      final TimeOfDay? picked = await showTimePicker(
-        context: context,
-        initialTime: _selectedTime,
-      );
-      
-      if (picked != null && picked != _selectedTime) {
-        setState(() => _selectedTime = picked);
+      // Usa toRadixString(16) para obter o valor hexadecimal da cor
+      final colorHex = color.value.toRadixString(16);
+      await _categoryHelper.insertCategory(name, colorHex);
+      await _loadCategories();
+      if (mounted) {
+         setState(() {
+           _selectedCategory = name;
+           _isCreatingCategory = false;
+         });
+        _showMessage('Categoria "$name" criada!', Colors.green);
       }
     } catch (e) {
-      _showMessage('Erro ao selecionar horário', Colors.red);
+      if (mounted) {
+        setState(() => _isCreatingCategory = false);
+        _showMessage('Erro ao criar categoria: $e', Colors.red);
+      }
     }
   }
 
   Future<void> _saveReminder() async {
     if (!_formKey.currentState!.validate()) {
+      _showMessage('Por favor, corrija os erros no formulário.', Colors.orange);
       return;
+    }
+
+    if (_selectedCategory == 'Adicione as categorias aqui' || _categories.indexWhere((c) => c['name'] == _selectedCategory) == -1) {
+       _showMessage('Por favor, selecione ou crie uma categoria válida.', Colors.orange);
+       return;
     }
 
     setState(() => _isSaving = true);
 
+    final combinedDateTime = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      _selectedTime.hour,
+      _selectedTime.minute,
+    );
+
+    final reminder = Reminder(
+      id: _isEditing ? widget.reminderToEdit!.id : null,
+      title: _titleController.text.trim(),
+      description: _descriptionController.text.trim(),
+      category: _selectedCategory,
+      dateTime: combinedDateTime,
+      isCompleted: _isEditing ? widget.reminderToEdit!.isCompleted : false,
+      isRecurring: _isRecurring,
+      recurringType: _isRecurring ? 'monthly' : null,
+      notificationsEnabled: _isEditing ? widget.reminderToEdit!.notificationsEnabled : true,
+    );
+
     try {
-      final DateTime reminderDateTime = DateTime(
-        _selectedDate.year,
-        _selectedDate.month,
-        _selectedDate.day,
-        _selectedTime.hour,
-        _selectedTime.minute,
-      );
-
-      final reminder = Reminder(
-        id: _isEditing ? widget.reminderToEdit!.id : null,
-        title: _titleController.text.trim(),
-        description: _descriptionController.text.trim(),
-        category: _selectedCategory,
-        dateTime: reminderDateTime,
-        isRecurring: _isRecurring,
-        recurringType: _isRecurring ? 'monthly' : null,
-        notificationsEnabled: _isEditing 
-          ? widget.reminderToEdit!.notificationsEnabled 
-          : true,
-      );
-
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      if (!mounted) return;
-
-      Navigator.pop(context, reminder);
-      
-    } catch (e) {
-      if (mounted) {
-        _showMessage('Erro ao salvar lembrete', Colors.red);
+      // CORREÇÃO: Usar a instância _databaseHelper diretamente
+      if (_isEditing) {
+        await _databaseHelper.updateReminder(reminder);
+        _showMessage('Lembrete atualizado com sucesso!', Colors.green);
+      } else {
+        await _databaseHelper.insertReminder(reminder);
+        _showMessage('Lembrete salvo com sucesso!', Colors.green);
       }
+      if (mounted) {
+        Navigator.pop(context, reminder);
+      }
+    } catch (e) {
+      _showMessage('Erro ao salvar lembrete: $e', Colors.red);
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -717,15 +766,13 @@ Widget _buildSaveButton() {
     }
   }
 
-  void _showMessage(String message, Color color) {
+  void _showMessage(String message, Color backgroundColor) {
     if (!mounted) return;
-    
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: color,
+        backgroundColor: backgroundColor,
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
       ),
     );
   }
@@ -738,3 +785,4 @@ Widget _buildSaveButton() {
     super.dispose();
   }
 }
+
