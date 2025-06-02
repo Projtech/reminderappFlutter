@@ -1,162 +1,3 @@
-import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // Import para RepeatInterval
-import '../models/reminder.dart';
-import '../database/category_helper.dart';
-import '../database/database_helper.dart';
-import '../services/notification_service.dart';
-// import '../screens/reminders_list.dart'; // REMOVIDO - unused_import
-// import 'package:flutter_colorpicker/flutter_colorpicker.dart'; // REMOVIDO - unused_import
-
-class AddReminderScreen extends StatefulWidget {
-  final Reminder? reminderToEdit;
-
-  const AddReminderScreen({super.key, this.reminderToEdit});
-
-  @override
-  State<AddReminderScreen> createState() => _AddReminderScreenState();
-}
-
-class _AddReminderScreenState extends State<AddReminderScreen> {
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _newCategoryController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
-
-  String _selectedCategory = 'Adicione as categorias aqui';
-  late DateTime _selectedDateTime;
-  bool _isRecurring = false;
-
-  List<Map<String, dynamic>> _categories = [];
-  final CategoryHelper _categoryHelper = CategoryHelper();
-  final DatabaseHelper _databaseHelper = DatabaseHelper();
-
-  bool _isLoadingCategories = true;
-  bool _isSaving = false;
-  bool _isCreatingCategory = false;
-
-  Color _selectedNewCategoryColor = Colors.grey;
-  final List<Color> _predefinedColors = [
-    Colors.blue, Colors.green, Colors.red, Colors.orange, Colors.purple,
-    Colors.teal, Colors.pink, Colors.indigo, Colors.amber, Colors.cyan,
-    Colors.brown, Colors.grey,
-  ];
-
-  bool get _isEditing => widget.reminderToEdit != null;
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedDateTime = _isEditing ? widget.reminderToEdit!.dateTime : DateTime.now();
-    _initializeScreen();
-  }
-
-  Future<void> _initializeScreen() async {
-    await _loadCategories();
-    if (_isEditing) {
-      _populateEditingData();
-    }
-  }
-
-  void _populateEditingData() {
-    final reminder = widget.reminderToEdit!;
-    _titleController.text = reminder.title;
-    _descriptionController.text = reminder.description;
-    _selectedCategory = reminder.category;
-    _isRecurring = reminder.isRecurring;
-  }
-
-  Future<void> _loadCategories() async {
-    if (!mounted) return;
-    setState(() => _isLoadingCategories = true);
-    try {
-      await _categoryHelper.ensureDefaultCategory();
-      await Future.delayed(const Duration(milliseconds: 100));
-      final categories = await _categoryHelper.getAllCategories();
-      if (!mounted) return;
-      setState(() {
-        _categories = categories;
-        _isLoadingCategories = false;
-        if (categories.isNotEmpty) {
-          final categoryNames = categories.map((c) => c['name'] as String).toList();
-          if (_isEditing && categoryNames.contains(widget.reminderToEdit!.category)) {
-             _selectedCategory = widget.reminderToEdit!.category;
-          } else if (!categoryNames.contains(_selectedCategory) || _selectedCategory == 'Adicione as categorias aqui') {
-             _selectedCategory = categoryNames.first;
-          }
-        } else {
-          _selectedCategory = 'Adicione as categorias aqui';
-        }
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isLoadingCategories = false;
-        _categories = [];
-        _selectedCategory = 'Adicione as categorias aqui';
-      });
-      _showMessage('Erro ao carregar categorias', Colors.red);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Scaffold(
-      backgroundColor: colorScheme.surface,
-      appBar: AppBar(
-        backgroundColor: colorScheme.primary,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: colorScheme.onPrimary),
-          onPressed: _isSaving ? null : () => Navigator.pop(context),
-        ),
-        title: Text(
-          _isEditing ? 'Editar Lembrete' : 'Novo Lembrete',
-          style: TextStyle(
-            color: colorScheme.onPrimary,
-            fontSize: 20,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ),
-      body: _isSaving ? _buildLoadingOverlay() : _buildMainContent(),
-    );
-  }
-
-  Widget _buildLoadingOverlay() {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Container(
-      // CORREÇÃO: Usar colorScheme.scrim ou similar para overlay
-      color: colorScheme.scrim.withOpacity(0.5),
-      child: Center(
-        child: Container(
-          margin: const EdgeInsets.all(50),
-          padding: const EdgeInsets.all(30),
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(15),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(color: colorScheme.primary),
-              const SizedBox(height: 20),
-              Text(
-                _isEditing ? 'Atualizando lembrete...' : 'Salvando lembrete...',
-                style: TextStyle(fontSize: 16, color: colorScheme.onSurface),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildMainContent() {
     return Form(
       key: _formKey,
@@ -223,18 +64,23 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     );
   }
 
+  // CORREÇÃO: Removido bloco duplicado de declaração de variáveis de tema daqui
+
   Widget _buildSimpleCard({
     required IconData icon,
     required String title,
     required Widget child,
   }) {
+    // CORREÇÃO: Variáveis de tema declaradas DENTRO do método
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.cardColor,
+        // CORREÇÃO: Usar cor ligeiramente mais clara para contraste no modo escuro
+        color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -268,14 +114,19 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     );
   }
 
+  // CORREÇÃO: Removido bloco duplicado de declaração de variáveis de tema daqui
+
   Widget _buildCategoryCard() {
+    // CORREÇÃO: Variáveis de tema declaradas DENTRO do método
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.cardColor,
+        // CORREÇÃO: Usar cor ligeiramente mais clara para contraste no modo escuro
+        color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -403,14 +254,19 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     );
   }
 
+  // CORREÇÃO: Removido bloco duplicado de declaração de variáveis de tema daqui
+
   Widget _buildRecurringCard() {
+    // CORREÇÃO: Variáveis de tema declaradas DENTRO do método
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.cardColor,
+        // CORREÇÃO: Usar cor ligeiramente mais clara para contraste no modo escuro
+        color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -444,14 +300,19 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     );
   }
 
+  // CORREÇÃO: Removido bloco duplicado de declaração de variáveis de tema daqui
+
   Widget _buildDateCard() {
+    // CORREÇÃO: Variáveis de tema declaradas DENTRO do método
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.cardColor,
+        // CORREÇÃO: Usar cor ligeiramente mais clara para contraste no modo escuro
+        color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -498,14 +359,19 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     );
   }
 
+  // CORREÇÃO: Removido bloco duplicado de declaração de variáveis de tema daqui
+
   Widget _buildTimeCard() {
+    // CORREÇÃO: Variáveis de tema declaradas DENTRO do método
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.cardColor,
+        // CORREÇÃO: Usar cor ligeiramente mais clara para contraste no modo escuro
+        color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -557,53 +423,27 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     final colorScheme = theme.colorScheme;
 
     return ElevatedButton.icon(
-      onPressed: _isSaving ? null : _saveReminder,
-      icon: Icon(Icons.save, color: colorScheme.onPrimary),
-      label: Text(
-        _isEditing ? 'Atualizar Lembrete' : 'Salvar Lembrete',
-        style: TextStyle(color: colorScheme.onPrimary, fontSize: 16),
-      ),
+      onPressed: _saveReminder,
+      icon: const Icon(Icons.save),
+      label: Text(_isEditing ? 'Atualizar Lembrete' : 'Salvar Lembrete'),
       style: ElevatedButton.styleFrom(
         backgroundColor: colorScheme.primary,
+        foregroundColor: colorScheme.onPrimary,
         padding: const EdgeInsets.symmetric(vertical: 16),
+        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
-        elevation: 2,
       ),
     );
   }
 
-  Future<void> _selectDate() async {
+  void _selectDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _selectedDateTime,
       firstDate: DateTime(2000),
       lastDate: DateTime(2101),
-      builder: (context, child) {
-        final currentTheme = Theme.of(context);
-        return Theme(
-          data: currentTheme.copyWith(
-            colorScheme: currentTheme.colorScheme.copyWith(
-              primary: currentTheme.colorScheme.primary,
-              onPrimary: currentTheme.colorScheme.onPrimary,
-              surface: currentTheme.colorScheme.surface,
-              onSurface: currentTheme.colorScheme.onSurface,
-            ),
-            // CORREÇÃO: Passar DialogThemeData diretamente
-            dialogTheme: currentTheme.dialogTheme.copyWith(
-              backgroundColor: currentTheme.colorScheme.surface,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(
-                foregroundColor: currentTheme.colorScheme.primary,
-              ),
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
     if (picked != null && picked != _selectedDateTime) {
       setState(() {
@@ -618,34 +458,10 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     }
   }
 
-  Future<void> _selectTime() async {
+  void _selectTime() async {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(_selectedDateTime),
-      builder: (context, child) {
-        final currentTheme = Theme.of(context);
-        return Theme(
-          data: currentTheme.copyWith(
-            colorScheme: currentTheme.colorScheme.copyWith(
-              primary: currentTheme.colorScheme.primary,
-              onPrimary: currentTheme.colorScheme.onPrimary,
-              surface: currentTheme.colorScheme.surface,
-              onSurface: currentTheme.colorScheme.onSurface,
-            ),
-            // CORREÇÃO: Passar DialogThemeData diretamente
-            dialogTheme: currentTheme.dialogTheme.copyWith(
-              backgroundColor: currentTheme.colorScheme.surface,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            timePickerTheme: currentTheme.timePickerTheme.copyWith(
-              backgroundColor: currentTheme.colorScheme.surface,
-              hourMinuteShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              dayPeriodShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
     if (picked != null) {
       setState(() {
@@ -661,35 +477,31 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   }
 
   void _showAddCategoryDialog() {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    _selectedNewCategoryColor = _predefinedColors.first;
     _newCategoryController.clear();
+    _selectedNewCategoryColor = Colors.grey;
 
     showDialog(
       context: context,
       builder: (context) {
+        Color pickerColor = _selectedNewCategoryColor;
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              backgroundColor: colorScheme.surface,
-              title: Text('Nova Categoria', style: TextStyle(color: colorScheme.onSurface)),
-              content: SingleChildScrollView( // Adicionado para evitar overflow com ColorPicker
+              title: const Text('Adicionar Nova Categoria'),
+              content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     TextField(
                       controller: _newCategoryController,
                       maxLength: 50,
-                      decoration: InputDecoration(
-                        hintText: 'Nome da categoria',
+                      decoration: const InputDecoration(
+                        labelText: 'Nome da Categoria',
                         counterText: '',
-                        hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                       ),
-                      style: TextStyle(color: colorScheme.onSurface),
                     ),
                     const SizedBox(height: 20),
-                    Text('Escolha uma cor:', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    const Text('Escolha uma cor:'),
                     const SizedBox(height: 10),
                     Wrap(
                       spacing: 10,
@@ -707,12 +519,9 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                             decoration: BoxDecoration(
                               color: color,
                               shape: BoxShape.circle,
-                              border: Border.all(
-                                color: _selectedNewCategoryColor == color
-                                    ? colorScheme.primary
-                                    : Colors.transparent,
-                                width: 3,
-                              ),
+                              border: _selectedNewCategoryColor == color
+                                  ? Border.all(color: Theme.of(context).colorScheme.onSurface, width: 2)
+                                  : null,
                             ),
                           ),
                         );
@@ -724,20 +533,21 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text('Cancelar', style: TextStyle(color: colorScheme.secondary)),
+                  child: const Text('Cancelar'),
                 ),
-                ElevatedButton(
+                TextButton(
                   onPressed: () async {
                     final name = _newCategoryController.text.trim();
-                    if (name.isNotEmpty) {
+                    if (name.isNotEmpty && name.length <= 50) {
                       Navigator.pop(context);
                       await _addCategory(name, _selectedNewCategoryColor);
+                    } else if (name.isEmpty) {
+                      _showMessage('Nome da categoria não pode ser vazio', Colors.orange);
                     } else {
-                      // TODO: Mostrar erro de nome vazio
+                      _showMessage('Nome da categoria muito longo (máx. 50)', Colors.orange);
                     }
                   },
-                  style: ElevatedButton.styleFrom(backgroundColor: colorScheme.primary),
-                  child: Text('Adicionar', style: TextStyle(color: colorScheme.onPrimary)),
+                  child: const Text('Adicionar'),
                 ),
               ],
             );
@@ -751,8 +561,92 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     if (!mounted) return;
     setState(() => _isCreatingCategory = true);
     try {
-      // CORREÇÃO: Usar .value que retorna int ARGB, e converter para String Hexadecimal (sem alpha)
-      String colorHex = '#${color.value.toRadixString(16).substring(2).padLeft(6, '0').toUpperCase()}';
+      final colorHex = '#${color.value.toRadixString(16).padLeft(8, '0').substring(2)}'; // Formato #RRGGBB
+      await _categoryHelper.insertCategory({
+        'name': name,
+        'color': color.value.toRadixString(16).padLeft(8, '0'), // Salva como ARGB hex string
+      });
+      await _loadCategories();
+      if (!mounted) return;
+      setState(() {
+        _selectedCategory = name;
+        _isCreatingCategory = false;
+      });
+      _showMessage('Categoria "$name" adicionada', Colors.green);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isCreatingCategory = false);
+      _showMessage('Erro ao adicionar categoria: $e', Colors.red);
+    }
+  }
+
+  void _saveReminder() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    if (_selectedCategory == 'Adicione as categorias aqui') {
+      _showMessage('Por favor, selecione ou adicione uma categoria.', Colors.orange);
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    final reminder = Reminder(
+      id: _isEditing ? widget.reminderToEdit!.id : null,
+      title: _titleController.text.trim(),
+      description: _descriptionController.text.trim(),
+      category: _selectedCategory,
+      dateTime: _selectedDateTime,
+      isCompleted: _isEditing ? widget.reminderToEdit!.isCompleted : false,
+      isRecurring: _isRecurring,
+      notificationsEnabled: _isEditing ? widget.reminderToEdit!.notificationsEnabled : true,
+    );
+
+    try {
+      if (_isEditing) {
+        await _databaseHelper.updateReminder(reminder);
+        await NotificationService.cancelNotification(reminder.id!); // Cancela a antiga
+      } else {
+        final id = await _databaseHelper.insertReminder(reminder);
+        reminder.id = id;
+      }
+
+      if (reminder.notificationsEnabled && !reminder.isCompleted) {
+        await NotificationService.scheduleNotification(
+          id: reminder.id!,
+          title: reminder.title,
+          description: reminder.description,
+          scheduledDate: reminder.dateTime,
+          category: reminder.category,
+          repeatInterval: _isRecurring ? RepeatInterval.monthly : null,
+        );
+      }
+
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      _showMessage(
+        _isEditing ? 'Lembrete atualizado!' : 'Lembrete salvo!',
+        Colors.green,
+      );
+      Navigator.pop(context, true); // Retorna true para indicar que algo foi salvo
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      _showMessage('Erro ao salvar lembrete: $e', Colors.red);
+    }
+  }
+
+  void _showMessage(String message, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+      ),
+    );
+  }
+}'0').toUpperCase()}';
 
       await _categoryHelper.addCategory(name, colorHex);
       await _loadCategories();
