@@ -76,8 +76,8 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
         final colorHex = catMap['color'] as String;
         categories.add(name);
         try {
-          // Adiciona 'FF' para opacidade total ao parsear RRGGBB
-          categoryColorMap[name] = Color(int.parse('FF$colorHex', radix: 16));
+          // CORREÇÃO: Parsear diretamente AARRGGBB
+          categoryColorMap[name] = Color(int.parse(colorHex, radix: 16));
         } catch (e) {
           debugPrint('Erro ao parsear cor $colorHex para categoria $name: $e');
           categoryColorMap[name] = Colors.grey; // Cor padrão em caso de erro

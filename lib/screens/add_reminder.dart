@@ -212,20 +212,13 @@
       items: _categories.map((category) {
         final name = category['name'] as String;
         final colorHex = category['color'] as String;
-        Color color = Colors.grey;
+        Color color = Colors.grey; // Cor padrão
         try {
-          // Tenta parsear como ARGB (padrão do Color.value)
+          // CORREÇÃO: Parsear diretamente a string AARRGGBB salva no DB
           color = Color(int.parse(colorHex, radix: 16));
         } catch (e) {
-          debugPrint('Erro ao parsear cor $colorHex para categoria $name no dropdown: $e');
-          // Tenta parsear como #RRGGBB (se for o caso)
-          try {
-             if (colorHex.startsWith('#') && colorHex.length == 7) {
-               color = Color(int.parse(colorHex.substring(1), radix: 16) + 0xFF000000);
-             }
-          } catch (e2) {
-             debugPrint('Erro ao parsear cor $colorHex como #RRGGBB: $e2');
-          }
+          debugPrint('Erro ao parsear cor $colorHex para categoria $name no dropdown: $e. Usando cor padrão.');
+          // Mantém a cor cinza padrão se o parse falhar
         }
 
         return DropdownMenuItem(
