@@ -52,8 +52,10 @@ class _ManageCategoriesScreenState extends State<ManageCategoriesScreen> {
 
   Future<void> _deleteCategory(int categoryId, String categoryName) async {
     if (_categories.length <= 1) {
-        if (mounted) _showMessage(
+        if (mounted) {
+          _showMessage(
             'Não é possível excluir a última categoria.', Colors.orange);
+        }
       return;
     }
 
@@ -61,14 +63,18 @@ class _ManageCategoriesScreenState extends State<ManageCategoriesScreen> {
       final reminderCount = await _databaseHelper.getReminderCountByCategory(categoryName);
       if (reminderCount > 0) {
         // BUG FIX: Add mounted check before showing SnackBar across async gap
-        if (mounted) _showMessage(
+        if (mounted) {
+          _showMessage(
             'Não é possível excluir: existem $reminderCount lembrete(s) nesta categoria.', Colors.orange);
+        }
         return;
       }
     } catch (e) {
       // BUG FIX: Add mounted check before showing SnackBar across async gap
-      if (mounted) _showMessage(
+      if (mounted) {
+        _showMessage(
           'Erro ao verificar lembretes associados.', Colors.red);
+      }
       return;
     }
 

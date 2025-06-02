@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // Importar SharedPreferences
 import '../screens/reminders_list.dart';
-import '../screens/add_reminder.dart';
+import 'add_reminder.dart';
 import '../services/notification_service.dart'; // Importar NotificationService
 
 class HomeScreen extends StatefulWidget {

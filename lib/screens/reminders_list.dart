@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../database/database_helper.dart';
 import '../models/reminder.dart';
-import '../screens/add_reminder.dart';
+import 'add_reminder.dart';
 import '../services/notification_service.dart';
 import 'package:intl/intl.dart';
 // Importa a tela de gerenciamento de categorias
@@ -248,7 +248,7 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
             decoration: BoxDecoration(
               color: isDark ? Colors.grey[800] : Colors.blue,
             ),
-            child: Text(
+            child: const Text(
               'Configurações',
               style: TextStyle(
                 color: Colors.white,
@@ -300,7 +300,7 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.category),
-            title: Text('Gerenciar Categorias'),
+            title: const Text('Gerenciar Categorias'),
             onTap: () {
               Navigator.pop(context);
               Navigator.push(

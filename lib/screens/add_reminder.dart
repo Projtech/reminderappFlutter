@@ -1,3 +1,133 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../database/category_helper.dart';
+import '../database/database_helper.dart';
+import '../models/reminder.dart';
+import '../services/notification_service.dart';
+import 'dart:async'; // Para Timer
+import 'package:flutter/foundation.dart'; // Para debugPrint
+
+class AddReminderScreen extends StatefulWidget {
+  final Reminder? reminderToEdit;
+
+  const AddReminderScreen({super.key, this.reminderToEdit});
+
+  @override
+  State<AddReminderScreen> createState() => _AddReminderScreenState();
+}
+
+class _AddReminderScreenState extends State<AddReminderScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _newCategoryController = TextEditingController();
+
+  late DateTime _selectedDateTime;
+  late String _selectedCategory;
+  late bool _isRecurring;
+  bool _isEditing = false;
+  bool _isLoadingCategories = true;
+  bool _isCreatingCategory = false;
+  bool _isSaving = false;
+
+  List<Map<String, dynamic>> _categories = [];
+  final DatabaseHelper _databaseHelper = DatabaseHelper();
+  final CategoryHelper _categoryHelper = CategoryHelper();
+  Color _selectedNewCategoryColor = Colors.grey;
+
+  final List<Color> _predefinedColors = [
+    Colors.red,
+    Colors.pink,
+    Colors.purple,
+    Colors.deepPurple,
+    Colors.indigo,
+    Colors.blue,
+    Colors.lightBlue,
+    Colors.cyan,
+    Colors.teal,
+    Colors.green,
+    Colors.lightGreen,
+    Colors.lime,
+    Colors.yellow,
+    Colors.amber,
+    Colors.orange,
+    Colors.deepOrange,
+    Colors.brown,
+    Colors.grey,
+    Colors.blueGrey
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _isEditing = widget.reminderToEdit != null;
+
+    if (_isEditing) {
+      final reminder = widget.reminderToEdit!;
+      _titleController.text = reminder.title;
+      _descriptionController.text = reminder.description ?? '';
+      _selectedDateTime = reminder.dateTime;
+      _selectedCategory = reminder.category;
+      _isRecurring = reminder.isRecurring;
+    } else {
+      _selectedDateTime = DateTime.now();
+      _selectedCategory =
+          'Adicione as categorias aqui'; // Valor inicial antes de carregar
+      _isRecurring = false;
+    }
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    if (!mounted) return;
+    setState(() => _isLoadingCategories = true);
+    try {
+      final loadedCategories = await _categoryHelper.getAllCategories();
+      if (!mounted) return;
+      setState(() {
+        _categories = loadedCategories;
+        if (_categories.isNotEmpty) {
+          final categoryNames =
+              _categories.map((c) => c['name'] as String).toList();
+          // Se não estiver editando OU se a categoria do lembrete a editar não existir mais,
+          // seleciona a primeira categoria da lista como padrão.
+          if (!_isEditing || !categoryNames.contains(_selectedCategory)) {
+            _selectedCategory = categoryNames.first;
+          }
+        } else {
+          _selectedCategory = 'Adicione as categorias aqui';
+        }
+        _isLoadingCategories = false;
+      });
+    } catch (e) {
+      debugPrint('Erro ao carregar categorias: $e');
+      if (!mounted) return;
+      setState(() => _isLoadingCategories = false);
+      _showMessage('Erro ao carregar categorias', Colors.red);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_isEditing ? 'Editar Lembrete' : 'Novo Lembrete'),
+        backgroundColor:
+            isDark ? colorScheme.surfaceContainerHighest : colorScheme.primary,
+        foregroundColor: isDark ? colorScheme.onSurface : colorScheme.onPrimary,
+      ),
+      body: _isSaving
+          ? const Center(child: CircularProgressIndicator())
+          : _buildMainContent(),
+      backgroundColor:
+          isDark ? colorScheme.surface : colorScheme.surfaceContainerLowest,
+    );
+  }
+
   Widget _buildMainContent() {
     return Form(
       key: _formKey,
@@ -64,14 +194,11 @@
     );
   }
 
-  // CORREÇÃO: Removido bloco duplicado de declaração de variáveis de tema daqui
-
   Widget _buildSimpleCard({
     required IconData icon,
     required String title,
     required Widget child,
   }) {
-    // CORREÇÃO: Variáveis de tema declaradas DENTRO do método
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
@@ -79,7 +206,6 @@
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        // CORREÇÃO: Usar cor ligeiramente mais clara para contraste no modo escuro
         color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
@@ -114,10 +240,7 @@
     );
   }
 
-  // CORREÇÃO: Removido bloco duplicado de declaração de variáveis de tema daqui
-
   Widget _buildCategoryCard() {
-    // CORREÇÃO: Variáveis de tema declaradas DENTRO do método
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
@@ -125,7 +248,6 @@
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        // CORREÇÃO: Usar cor ligeiramente mais clara para contraste no modo escuro
         color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
@@ -156,7 +278,8 @@
                 SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: colorScheme.primary),
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: colorScheme.primary),
                 )
               else
                 IconButton(
@@ -175,7 +298,9 @@
                       children: [
                         CircularProgressIndicator(color: colorScheme.primary),
                         const SizedBox(height: 8),
-                        Text('Carregando categorias...', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                        Text('Carregando categorias...',
+                            style:
+                                TextStyle(color: colorScheme.onSurfaceVariant)),
                       ],
                     ),
                   ),
@@ -198,27 +323,25 @@
     }
 
     final categoryNames = _categories.map((c) => c['name'] as String).toList();
-    // Garante que _selectedCategory seja válido ou o primeiro da lista
-    if (!categoryNames.contains(_selectedCategory) || _selectedCategory == 'Adicione as categorias aqui') {
-       _selectedCategory = categoryNames.first;
+    if (!categoryNames.contains(_selectedCategory) ||
+        _selectedCategory == 'Adicione as categorias aqui') {
+      _selectedCategory = categoryNames.first;
     }
 
     return DropdownButtonFormField<String>(
       value: _selectedCategory,
       style: TextStyle(color: colorScheme.onSurface),
-      // CORREÇÃO: Usar colorScheme.surfaceContainerHighest
       dropdownColor: colorScheme.surfaceContainerHighest,
       decoration: const InputDecoration(border: InputBorder.none),
       items: _categories.map((category) {
         final name = category['name'] as String;
         final colorHex = category['color'] as String;
-        Color color = Colors.grey; // Cor padrão
+        Color color = Colors.grey;
         try {
-          // CORREÇÃO: Parsear diretamente a string AARRGGBB salva no DB
           color = Color(int.parse(colorHex, radix: 16));
         } catch (e) {
-          debugPrint('Erro ao parsear cor $colorHex para categoria $name no dropdown: $e. Usando cor padrão.');
-          // Mantém a cor cinza padrão se o parse falhar
+          debugPrint(
+              'Erro ao parsear cor $colorHex para categoria $name no dropdown: $e. Usando cor padrão.');
         }
 
         return DropdownMenuItem(
@@ -247,10 +370,7 @@
     );
   }
 
-  // CORREÇÃO: Removido bloco duplicado de declaração de variáveis de tema daqui
-
   Widget _buildRecurringCard() {
-    // CORREÇÃO: Variáveis de tema declaradas DENTRO do método
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
@@ -258,7 +378,6 @@
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        // CORREÇÃO: Usar cor ligeiramente mais clara para contraste no modo escuro
         color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
@@ -293,10 +412,7 @@
     );
   }
 
-  // CORREÇÃO: Removido bloco duplicado de declaração de variáveis de tema daqui
-
   Widget _buildDateCard() {
-    // CORREÇÃO: Variáveis de tema declaradas DENTRO do método
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
@@ -304,7 +420,6 @@
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        // CORREÇÃO: Usar cor ligeiramente mais clara para contraste no modo escuro
         color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
@@ -352,10 +467,7 @@
     );
   }
 
-  // CORREÇÃO: Removido bloco duplicado de declaração de variáveis de tema daqui
-
   Widget _buildTimeCard() {
-    // CORREÇÃO: Variáveis de tema declaradas DENTRO do método
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
@@ -363,7 +475,6 @@
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        // CORREÇÃO: Usar cor ligeiramente mais clara para contraste no modo escuro
         color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
@@ -513,7 +624,11 @@
                               color: color,
                               shape: BoxShape.circle,
                               border: _selectedNewCategoryColor == color
-                                  ? Border.all(color: Theme.of(context).colorScheme.onSurface, width: 2)
+                                  ? Border.all(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface,
+                                      width: 2)
                                   : null,
                             ),
                           ),
@@ -535,9 +650,11 @@
                       Navigator.pop(context);
                       await _addCategory(name, _selectedNewCategoryColor);
                     } else if (name.isEmpty) {
-                      _showMessage('Nome da categoria não pode ser vazio', Colors.orange);
+                      _showMessage('Nome da categoria não pode ser vazio',
+                          Colors.orange);
                     } else {
-                      _showMessage('Nome da categoria muito longo (máx. 50)', Colors.orange);
+                      _showMessage('Nome da categoria muito longo (máx. 50)',
+                          Colors.orange);
                     }
                   },
                   child: const Text('Adicionar'),
@@ -554,92 +671,9 @@
     if (!mounted) return;
     setState(() => _isCreatingCategory = true);
     try {
-      final colorHex = '#${color.value.toRadixString(16).padLeft(8, '0').substring(2)}'; // Formato #RRGGBB
-      await _categoryHelper.insertCategory({
-        'name': name,
-        'color': color.value.toRadixString(16).padLeft(8, '0'), // Salva como ARGB hex string
-      });
-      await _loadCategories();
-      if (!mounted) return;
-      setState(() {
-        _selectedCategory = name;
-        _isCreatingCategory = false;
-      });
-      _showMessage('Categoria "$name" adicionada', Colors.green);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isCreatingCategory = false);
-      _showMessage('Erro ao adicionar categoria: $e', Colors.red);
-    }
-  }
-
-  void _saveReminder() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    if (_selectedCategory == 'Adicione as categorias aqui') {
-      _showMessage('Por favor, selecione ou adicione uma categoria.', Colors.orange);
-      return;
-    }
-
-    setState(() => _isSaving = true);
-
-    final reminder = Reminder(
-      id: _isEditing ? widget.reminderToEdit!.id : null,
-      title: _titleController.text.trim(),
-      description: _descriptionController.text.trim(),
-      category: _selectedCategory,
-      dateTime: _selectedDateTime,
-      isCompleted: _isEditing ? widget.reminderToEdit!.isCompleted : false,
-      isRecurring: _isRecurring,
-      notificationsEnabled: _isEditing ? widget.reminderToEdit!.notificationsEnabled : true,
-    );
-
-    try {
-      if (_isEditing) {
-        await _databaseHelper.updateReminder(reminder);
-        await NotificationService.cancelNotification(reminder.id!); // Cancela a antiga
-      } else {
-        final id = await _databaseHelper.insertReminder(reminder);
-        reminder.id = id;
-      }
-
-      if (reminder.notificationsEnabled && !reminder.isCompleted) {
-        await NotificationService.scheduleNotification(
-          id: reminder.id!,
-          title: reminder.title,
-          description: reminder.description,
-          scheduledDate: reminder.dateTime,
-          category: reminder.category,
-          repeatInterval: _isRecurring ? RepeatInterval.monthly : null,
-        );
-      }
-
-      if (!mounted) return;
-      setState(() => _isSaving = false);
-      _showMessage(
-        _isEditing ? 'Lembrete atualizado!' : 'Lembrete salvo!',
-        Colors.green,
-      );
-      Navigator.pop(context, true); // Retorna true para indicar que algo foi salvo
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isSaving = false);
-      _showMessage('Erro ao salvar lembrete: $e', Colors.red);
-    }
-  }
-
-  void _showMessage(String message, Color color) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: color,
-      ),
-    );
-  }
-}'0').toUpperCase()}';
+      // Salva como AARRGGBB hex string
+      final colorHex =
+          color.value.toRadixString(16).padLeft(8, '0').toUpperCase();
 
       await _categoryHelper.addCategory(name, colorHex);
       await _loadCategories();
@@ -665,8 +699,10 @@
       return;
     }
 
-    if (_selectedCategory == 'Adicione as categorias aqui' || _categories.where((c) => c['name'] == _selectedCategory).isEmpty) {
-      _showMessage('Por favor, selecione ou adicione uma categoria válida.', Colors.orange);
+    if (_selectedCategory == 'Adicione as categorias aqui' ||
+        _categories.where((c) => c['name'] == _selectedCategory).isEmpty) {
+      _showMessage('Por favor, selecione ou adicione uma categoria válida.',
+          Colors.orange);
       return;
     }
 
@@ -676,8 +712,10 @@
     final now = DateTime.now();
     final finalDateTime = _selectedDateTime;
 
-    if (finalDateTime.isBefore(now)) {
-       debugPrint("Aviso: Data/hora selecionada ($finalDateTime) está no passado. Notificação não será agendada.");
+    // Adicionado para evitar agendar notificações no passado imediato
+    if (finalDateTime.isBefore(now.subtract(const Duration(seconds: 1)))) {
+      debugPrint(
+          "Aviso: Data/hora selecionada ($finalDateTime) está no passado. Notificação não será agendada.");
     }
 
     final reminder = Reminder(
@@ -688,8 +726,11 @@
       dateTime: finalDateTime,
       isCompleted: _isEditing ? widget.reminderToEdit!.isCompleted : false,
       isRecurring: _isRecurring,
-      recurringType: _isRecurring ? 'monthly' : null,
-      notificationsEnabled: _isEditing ? widget.reminderToEdit!.notificationsEnabled : true,
+      recurringType: _isRecurring
+          ? 'monthly'
+          : null, // Ajuste conforme sua lógica de recorrência
+      notificationsEnabled:
+          _isEditing ? widget.reminderToEdit!.notificationsEnabled : true,
     );
 
     try {
@@ -698,19 +739,22 @@
         await _databaseHelper.updateReminder(reminder);
       } else {
         savedId = await _databaseHelper.insertReminder(reminder);
-        reminder.id = savedId;
+        reminder.id = savedId; // Atualiza o ID no objeto local
       }
 
       if (savedId != null) {
         await NotificationService.cancelNotification(savedId);
         // Apenas agenda se habilitado E data/hora não estiver muito no passado
-        if (reminder.notificationsEnabled && finalDateTime.isAfter(now.subtract(const Duration(seconds: 5)))) {
+        if (reminder.notificationsEnabled &&
+            !reminder.isCompleted &&
+            finalDateTime.isAfter(now.subtract(const Duration(seconds: 5)))) {
           if (reminder.isRecurring) {
             // A lógica de recorrência mensal precisa ser implementada corretamente.
-            // O NotificationService atual não suporta RepeatInterval.monthly.
-            // Por enquanto, agendaremos apenas a próxima ocorrência.
+            // O NotificationService atual pode não suportar RepeatInterval.monthly diretamente.
+            // Agendaremos apenas a próxima ocorrência.
             DateTime nextOccurrence = reminder.getNextOccurrence();
-            debugPrint("Agendando notificação recorrente (próxima ocorrência) para: $nextOccurrence");
+            debugPrint(
+                "Agendando notificação recorrente (próxima ocorrência) para: $nextOccurrence");
             await NotificationService.scheduleNotification(
               id: savedId,
               title: "(Recorrente) ${reminder.title}",
@@ -718,7 +762,7 @@
               scheduledDate: nextOccurrence,
               category: reminder.category,
             );
-            // Nota: O app precisaria reagendar a notificação após ela disparar.
+            // Nota: O app precisaria ter lógica para reagendar a notificação após ela disparar.
           } else {
             await NotificationService.scheduleNotification(
               id: savedId,
@@ -734,7 +778,6 @@
       if (mounted) {
         Navigator.pop(context, reminder); // Retorna o lembrete salvo/atualizado
       }
-
     } catch (e) {
       debugPrint('❌ Erro ao salvar lembrete: $e');
       if (mounted) {
@@ -763,4 +806,3 @@
     super.dispose();
   }
 }
-
