@@ -23,14 +23,17 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   final _newCategoryController = TextEditingController();
 
   late DateTime _selectedDateTime;
-  late String _selectedCategory;
+  late String _selectedCategory; // Armazena o nome NORMALIZADO (lowercase, trimmed)
   late bool _isRecurring;
   bool _isEditing = false;
   bool _isLoadingCategories = true;
   bool _isCreatingCategory = false;
   bool _isSaving = false;
 
-  List<Map<String, dynamic>> _categories = [];
+  // Mapa: nome normalizado -> {originalName, colorHex, color}
+  Map<String, Map<String, dynamic>> _categoriesMap = {};
+  List<String> _normalizedCategoryNames = []; // Lista de nomes normalizados para o dropdown
+
   final DatabaseHelper _databaseHelper = DatabaseHelper();
   final CategoryHelper _categoryHelper = CategoryHelper();
   Color _selectedNewCategoryColor = Colors.grey;
@@ -67,35 +70,73 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       _titleController.text = reminder.title;
       _descriptionController.text = reminder.description ?? '';
       _selectedDateTime = reminder.dateTime;
-      _selectedCategory = reminder.category;
+      _selectedCategory = reminder.category.trim().toLowerCase();
       _isRecurring = reminder.isRecurring;
     } else {
       _selectedDateTime = DateTime.now();
-      _selectedCategory =
-          'Adicione as categorias aqui'; // Valor inicial antes de carregar
+      _selectedCategory = '';
       _isRecurring = false;
     }
     _loadCategories();
+  }
+
+  // Função auxiliar para garantir que o hex da cor tenha o alfa
+  Color _parseColorHex(String hex, String categoryName) {
+    String hexUpper = hex.toUpperCase().replaceAll('#', '');
+    if (hexUpper.length == 6) {
+      hexUpper = 'FF$hexUpper';
+    }
+    if (hexUpper.length != 8) {
+      debugPrint("*** ERRO: Hex inválido '$hex' para categoria '$categoryName'. Usando Cinza padrão. ***");
+      return Colors.grey;
+    }
+    try {
+      return Color(int.parse(hexUpper, radix: 16));
+    } catch (e) {
+      debugPrint("*** ERRO ao parsear hex '$hexUpper' para categoria '$categoryName': $e. Usando Cinza padrão. ***");
+      return Colors.grey;
+    }
   }
 
   Future<void> _loadCategories() async {
     if (!mounted) return;
     setState(() => _isLoadingCategories = true);
     try {
-      final loadedCategories = await _categoryHelper.getAllCategories();
+      final loadedCategoriesData = await _categoryHelper.getAllCategories();
       if (!mounted) return;
+
+      final tempCategoriesMap = <String, Map<String, dynamic>>{};
+      final tempNormalizedNames = <String>[];
+
+      for (final catMap in loadedCategoriesData) {
+        final originalName = catMap['name'] as String? ?? '';
+        final normalizedName = originalName.trim().toLowerCase();
+        if (normalizedName.isEmpty) continue;
+
+        final colorHex = catMap['color'] as String? ?? 'FF808080'; // Cinza padrão
+        // *** CORREÇÃO: Usar função auxiliar para parsear e garantir alfa ***
+        final color = _parseColorHex(colorHex, normalizedName);
+
+        tempCategoriesMap[normalizedName] = {
+          'originalName': originalName,
+          'colorHex': colorHex, // Mantém o hex original lido
+          'color': color, // Cor parseada e com alfa garantido
+        };
+        tempNormalizedNames.add(normalizedName);
+      }
+
+      tempNormalizedNames.sort();
+
       setState(() {
-        _categories = loadedCategories;
-        if (_categories.isNotEmpty) {
-          final categoryNames =
-              _categories.map((c) => c['name'] as String).toList();
-          // Se não estiver editando OU se a categoria do lembrete a editar não existir mais,
-          // seleciona a primeira categoria da lista como padrão.
-          if (!_isEditing || !categoryNames.contains(_selectedCategory)) {
-            _selectedCategory = categoryNames.first;
+        _categoriesMap = tempCategoriesMap;
+        _normalizedCategoryNames = tempNormalizedNames;
+
+        if (_normalizedCategoryNames.isNotEmpty) {
+          if (!_normalizedCategoryNames.contains(_selectedCategory) || _selectedCategory.isEmpty) {
+            _selectedCategory = _normalizedCategoryNames.first;
           }
         } else {
-          _selectedCategory = 'Adicione as categorias aqui';
+          _selectedCategory = '';
         }
         _isLoadingCategories = false;
       });
@@ -315,17 +356,15 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    if (_categories.isEmpty) {
+    if (_normalizedCategoryNames.isEmpty) {
       return Text(
         'Nenhuma categoria encontrada. Adicione uma clicando no +.',
         style: TextStyle(color: colorScheme.onSurfaceVariant),
       );
     }
 
-    final categoryNames = _categories.map((c) => c['name'] as String).toList();
-    if (!categoryNames.contains(_selectedCategory) ||
-        _selectedCategory == 'Adicione as categorias aqui') {
-      _selectedCategory = categoryNames.first;
+    if (!_normalizedCategoryNames.contains(_selectedCategory)) {
+       _selectedCategory = _normalizedCategoryNames.first;
     }
 
     return DropdownButtonFormField<String>(
@@ -333,31 +372,25 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       style: TextStyle(color: colorScheme.onSurface),
       dropdownColor: colorScheme.surfaceContainerHighest,
       decoration: const InputDecoration(border: InputBorder.none),
-      items: _categories.map((category) {
-        final name = category['name'] as String;
-        final colorHex = category['color'] as String;
-        Color color = Colors.grey;
-        try {
-          color = Color(int.parse(colorHex, radix: 16));
-        } catch (e) {
-          debugPrint(
-              'Erro ao parsear cor $colorHex para categoria $name no dropdown: $e. Usando cor padrão.');
-        }
+      items: _normalizedCategoryNames.map((normalizedName) {
+        final categoryData = _categoriesMap[normalizedName];
+        // *** CORREÇÃO: Usar cor padrão cinza se não encontrar ***
+        final color = categoryData?['color'] as Color? ?? Colors.grey;
 
         return DropdownMenuItem(
-          value: name,
+          value: normalizedName,
           child: Row(
             children: [
               Container(
                 width: 16,
                 height: 16,
                 decoration: BoxDecoration(
-                  color: color,
+                  color: color, // Cor já deve estar opaca
                   shape: BoxShape.circle,
                 ),
               ),
               const SizedBox(width: 8),
-              Text(name),
+              Text(normalizedName),
             ],
           ),
         );
@@ -366,6 +399,12 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         if (value != null) {
           setState(() => _selectedCategory = value);
         }
+      },
+      validator: (value) {
+         if (value == null || value.isEmpty || !_normalizedCategoryNames.contains(value)) {
+           return 'Selecione uma categoria válida';
+         }
+         return null;
       },
     );
   }
@@ -645,11 +684,15 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                 ),
                 TextButton(
                   onPressed: () async {
-                    final name = _newCategoryController.text.trim();
-                    if (name.isNotEmpty && name.length <= 50) {
-                      Navigator.pop(context);
-                      await _addCategory(name, _selectedNewCategoryColor);
-                    } else if (name.isEmpty) {
+                    final normalizedName = _newCategoryController.text.trim().toLowerCase();
+                    if (normalizedName.isNotEmpty && normalizedName.length <= 50) {
+                      if (_normalizedCategoryNames.contains(normalizedName)) {
+                         _showMessage('Categoria "$normalizedName" já existe.', Colors.orange);
+                      } else {
+                        Navigator.pop(context);
+                        await _addCategory(normalizedName, _selectedNewCategoryColor);
+                      }
+                    } else if (normalizedName.isEmpty) {
                       _showMessage('Nome da categoria não pode ser vazio',
                           Colors.orange);
                     } else {
@@ -667,22 +710,22 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     );
   }
 
-  Future<void> _addCategory(String name, Color color) async {
+  Future<void> _addCategory(String normalizedName, Color color) async {
     if (!mounted) return;
     setState(() => _isCreatingCategory = true);
     try {
-      // Salva como AARRGGBB hex string
+      // *** CORREÇÃO: Garantir formato AARRGGBB ao salvar ***
       final colorHex =
           color.value.toRadixString(16).padLeft(8, '0').toUpperCase();
 
-      await _categoryHelper.addCategory(name, colorHex);
+      await _categoryHelper.addCategory(normalizedName, colorHex);
       await _loadCategories();
       if (mounted) {
         setState(() {
-          _selectedCategory = name;
+          _selectedCategory = normalizedName;
           _isCreatingCategory = false;
         });
-        _showMessage('Categoria "$name" adicionada!', Colors.green);
+        _showMessage('Categoria "$normalizedName" adicionada!', Colors.green);
       }
     } catch (e) {
       debugPrint('Erro ao adicionar categoria: $e');
@@ -699,10 +742,8 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       return;
     }
 
-    if (_selectedCategory == 'Adicione as categorias aqui' ||
-        _categories.where((c) => c['name'] == _selectedCategory).isEmpty) {
-      _showMessage('Por favor, selecione ou adicione uma categoria válida.',
-          Colors.orange);
+    if (_selectedCategory.isEmpty || !_normalizedCategoryNames.contains(_selectedCategory)) {
+      _showMessage('Por favor, selecione ou adicione uma categoria válida.', Colors.orange);
       return;
     }
 
@@ -712,7 +753,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     final now = DateTime.now();
     final finalDateTime = _selectedDateTime;
 
-    // Adicionado para evitar agendar notificações no passado imediato
     if (finalDateTime.isBefore(now.subtract(const Duration(seconds: 1)))) {
       debugPrint(
           "Aviso: Data/hora selecionada ($finalDateTime) está no passado. Notificação não será agendada.");
@@ -722,13 +762,11 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       id: _isEditing ? widget.reminderToEdit!.id : null,
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim(),
-      category: _selectedCategory,
+      category: _selectedCategory, // Salva nome normalizado
       dateTime: finalDateTime,
       isCompleted: _isEditing ? widget.reminderToEdit!.isCompleted : false,
       isRecurring: _isRecurring,
-      recurringType: _isRecurring
-          ? 'monthly'
-          : null, // Ajuste conforme sua lógica de recorrência
+      recurringType: _isRecurring ? 'monthly' : null,
       notificationsEnabled:
           _isEditing ? widget.reminderToEdit!.notificationsEnabled : true,
     );
@@ -739,19 +777,15 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         await _databaseHelper.updateReminder(reminder);
       } else {
         savedId = await _databaseHelper.insertReminder(reminder);
-        reminder.id = savedId; // Atualiza o ID no objeto local
+        reminder.id = savedId;
       }
 
       if (savedId != null) {
         await NotificationService.cancelNotification(savedId);
-        // Apenas agenda se habilitado E data/hora não estiver muito no passado
         if (reminder.notificationsEnabled &&
             !reminder.isCompleted &&
             finalDateTime.isAfter(now.subtract(const Duration(seconds: 5)))) {
           if (reminder.isRecurring) {
-            // A lógica de recorrência mensal precisa ser implementada corretamente.
-            // O NotificationService atual pode não suportar RepeatInterval.monthly diretamente.
-            // Agendaremos apenas a próxima ocorrência.
             DateTime nextOccurrence = reminder.getNextOccurrence();
             debugPrint(
                 "Agendando notificação recorrente (próxima ocorrência) para: $nextOccurrence");
@@ -762,7 +796,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
               scheduledDate: nextOccurrence,
               category: reminder.category,
             );
-            // Nota: O app precisaria ter lógica para reagendar a notificação após ela disparar.
           } else {
             await NotificationService.scheduleNotification(
               id: savedId,
@@ -776,7 +809,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       }
 
       if (mounted) {
-        Navigator.pop(context, reminder); // Retorna o lembrete salvo/atualizado
+        Navigator.pop(context, true);
       }
     } catch (e) {
       debugPrint('❌ Erro ao salvar lembrete: $e');
@@ -806,3 +839,4 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     super.dispose();
   }
 }
+

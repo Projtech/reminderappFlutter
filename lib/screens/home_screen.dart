@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // Importar SharedPreferences
+import 'package:permission_handler/permission_handler.dart'; // Importar Permission Handler
+import 'package:shared_preferences/shared_preferences.dart';
 import '../screens/reminders_list.dart';
 import 'add_reminder.dart';
-import '../services/notification_service.dart'; // Importar NotificationService
+import '../services/notification_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,38 +17,58 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // ✅ Pedir permissão de notificação após o primeiro frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _requestNotificationPermissionIfNeeded();
     });
   }
 
-  // ✅ Função para pedir permissão apenas uma vez
+  // --- FUNÇÃO CORRIGIDA PARA USAR OS NOVOS MÉTODOS DO NotificationService ---
   Future<void> _requestNotificationPermissionIfNeeded() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      bool alreadyRequested = prefs.getBool('notification_permission_requested_v2') ?? false;
-      if (!mounted) return; // Check if the widget is still mounted
+      // Usar uma chave diferente para garantir que a nova lógica seja executada pelo menos uma vez
+      bool alreadyRequested = prefs.getBool('notification_permission_requested_v3') ?? false;
+      if (!mounted) return;
 
       if (!alreadyRequested) {
-        debugPrint("HomeScreen: Requesting notification permissions for the first time.");
-        final bool granted = await NotificationService.requestPermissionsIfNeeded();
+        debugPrint("HomeScreen: Requesting core permissions (Notification & Exact Alarm) for the first time.");
+        // Chamar o novo método que usa permission_handler
+        final Map<Permission, PermissionStatus> statuses = await NotificationService.requestCorePermissions();
         if (!mounted) return;
-        await prefs.setBool('notification_permission_requested_v2', true);
-        debugPrint("HomeScreen: Permission request finished. Granted: $granted");
 
-        // Opcional: Mostrar um SnackBar informando o usuário
-        // if (granted) {
-        //   ScaffoldMessenger.of(context).showSnackBar(
-        //     const SnackBar(content: Text('Permissão de notificações concedida!'), backgroundColor: Colors.green),
-        //   );
-        // } else {
-        //   ScaffoldMessenger.of(context).showSnackBar(
-        //     const SnackBar(content: Text('Permissão de notificações negada. Você pode ativá-la nas configurações.'), backgroundColor: Colors.orange),
-        //   );
-        // }
+        // Marcar como solicitado
+        await prefs.setBool('notification_permission_requested_v3', true);
+
+        // Verificar os status retornados
+        bool notificationGranted = statuses[Permission.notification]?.isGranted ?? false;
+        bool alarmGranted = statuses[Permission.scheduleExactAlarm]?.isGranted ?? false;
+        
+        debugPrint("HomeScreen: Permission request finished. Notification Granted: $notificationGranted, Exact Alarm Granted: $alarmGranted");
+
+        // Mostrar feedback ao usuário
+        if (notificationGranted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Permissão de notificações concedida!'), backgroundColor: Colors.green),
+          );
+          if (!alarmGranted) {
+             // Informar sobre alarme exato se necessário (opcional, pode ser confuso)
+             // ScaffoldMessenger.of(context).showSnackBar(
+             //   const SnackBar(content: Text('Permissão de alarme exato não concedida. Lembretes podem não ser precisos.'), backgroundColor: Colors.orange),
+             // );
+          }
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Permissão de notificações negada. Ative nas configurações para receber lembretes.'), backgroundColor: Colors.orange),
+          );
+          // Opcional: Tentar abrir as configurações se negado
+          // await NotificationService.openSettingsAndRequestPermissions();
+        }
+
       } else {
-        debugPrint("HomeScreen: Notification permissions already requested in a previous session.");
+        debugPrint("HomeScreen: Core permissions already requested in a previous session. Checking current status...");
+        // Opcional: Verificar status atual silenciosamente se já foi solicitado antes
+        await NotificationService.checkNotificationPermissionStatus();
+        await NotificationService.checkExactAlarmPermissionStatus();
       }
     } catch (e) {
        debugPrint("HomeScreen: Error requesting notification permission: $e");
@@ -62,20 +83,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Obter o tema atual
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      // Usar cor de fundo do tema
-      backgroundColor: colorScheme.surface, // Changed from background
+      backgroundColor: colorScheme.surface,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20.0, 30.0, 20.0, 20.0), // Adjusted padding
+          padding: const EdgeInsets.fromLTRB(20.0, 30.0, 20.0, 20.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Logo/Ícone principal - Refinado com gradiente suave
               Container(
                 width: 120,
                 height: 120,
@@ -91,14 +109,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   borderRadius: BorderRadius.circular(60),
                   boxShadow: [
                     BoxShadow(
-                      color: colorScheme.primary.withAlpha((0.2 * 255).round()), // Corrigido de withOpacity(0.2)
+                      color: colorScheme.primary.withAlpha((0.2 * 255).round()),
                       blurRadius: 15,
                       offset: const Offset(0, 5),
                     )
                   ]
                 ),
                 child: Icon(
-                  Icons.notifications_active_outlined, // Ícone Outlined para um visual mais leve
+                  Icons.notifications_active_outlined,
                   size: 60,
                   color: colorScheme.onPrimary,
                 ),
@@ -106,7 +124,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 30),
 
-              // Título
               Text(
                 'Seus Lembretes',
                 style: theme.textTheme.headlineMedium?.copyWith(
@@ -117,7 +134,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 10),
 
-              // Subtítulo
               Text(
                 'Organize seus compromissos e não perca mais nada.',
                  style: theme.textTheme.bodyLarge?.copyWith(
@@ -128,7 +144,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 60),
 
-              // Botão principal - Estilo ligeiramente ajustado
               SizedBox(
                 width: double.infinity,
                 height: 56,
@@ -163,7 +178,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 16),
 
-              // Botão secundário (OutlinedButton) - Estilo ligeiramente ajustado
               SizedBox(
                 width: double.infinity,
                 height: 56,
@@ -197,7 +211,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const Spacer(),
 
-              // Nome da Empresa
               Padding(
                 padding: const EdgeInsets.only(bottom: 10.0),
                 child: Text(

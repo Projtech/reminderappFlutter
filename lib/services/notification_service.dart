@@ -1,15 +1,15 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart'; // Importar permission_handler
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
-import 'package:intl/intl.dart'; // Adicionado import para DateFormat
+import 'package:intl/intl.dart';
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
   static bool _initialized = false;
-  // static bool _permissionRequestedThisSession = false; // REMOVIDO - unused_field
 
   static Future<void> initialize() async {
     if (_initialized) return;
@@ -17,25 +17,21 @@ class NotificationService {
       debugPrint('NotificationService: Initializing...');
       tz.initializeTimeZones();
       try {
-        // Usando a classe FlutterTimezone definida abaixo
         final String currentTimeZone = await FlutterTimezone.getLocalTimezone();
         tz.setLocalLocation(tz.getLocation(currentTimeZone));
         debugPrint('NotificationService: Timezone initialized to $currentTimeZone');
       } catch (e) {
         debugPrint('❌ NotificationService: Failed to get/set local timezone: $e. Using default.');
-        // Considerar definir um timezone padrão seguro, como UTC
         tz.setLocalLocation(tz.getLocation('UTC'));
       }
 
       const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-      const iosSettings = DarwinInitializationSettings(
-        onDidReceiveLocalNotification: _onDidReceiveLocalNotification,
-        // requestAlertPermission, requestBadgePermission, requestSoundPermission são gerenciados por requestPermissionsIfNeeded
-      );
+      // Remover configurações específicas de iOS, já que o foco é Android
+      // const iosSettings = DarwinInitializationSettings(...);
 
       const settings = InitializationSettings(
         android: androidSettings,
-        iOS: iosSettings,
+        // iOS: iosSettings, // Remover iOS
       );
 
       final bool? didInitialize = await _notifications.initialize(
@@ -59,92 +55,67 @@ class NotificationService {
     }
   }
 
-  static Future<bool> requestPermissionsIfNeeded() async {
+  // --- MÉTODO REVISADO PARA USAR PERMISSION_HANDLER --- 
+  static Future<Map<Permission, PermissionStatus>> requestCorePermissions() async {
     if (!_initialized) {
        debugPrint('NotificationService: Cannot request permissions, service not initialized.');
-       return false;
+       return {};
     }
+    debugPrint('NotificationService: Requesting core permissions using permission_handler...');
+    
+    Map<Permission, PermissionStatus> statuses = await [
+      Permission.notification, // Permissão básica de notificação (Android 13+)
+      Permission.scheduleExactAlarm // Permissão para alarmes exatos (Android 12+)
+    ].request();
 
-    debugPrint('NotificationService: Explicitly requesting permissions...');
-    // _permissionRequestedThisSession = true; // Removido pois o campo foi removido
-    bool notificationPermission = false;
-    bool exactAlarmPermission = true; // Assume true por padrão, será atualizado se Android
+    debugPrint('NotificationService: Permission statuses after request:');
+    statuses.forEach((permission, status) {
+      debugPrint('  ${permission.toString()}: ${status.toString()}');
+    });
 
-    try {
-      // iOS
-      final iosImplementation = _notifications.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
-      if (iosImplementation != null) {
-         final bool? iosPermissions = await iosImplementation.requestPermissions(
-            alert: true,
-            badge: true,
-            sound: true,
-          );
-         notificationPermission = iosPermissions ?? false;
-         debugPrint('NotificationService: iOS Permissions Granted: $notificationPermission');
-      }
-
-      // Android
-      final androidImplementation = _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-      if (androidImplementation != null) {
-        final bool? androidNotificationPermission = await androidImplementation.requestNotificationsPermission();
-        notificationPermission = androidNotificationPermission ?? false;
-        debugPrint('NotificationService: Android Notification Permission Granted: $notificationPermission');
-
-        // A permissão de alarme exato só é relevante no Android
-        final bool? androidExactAlarmPermission = await androidImplementation.requestExactAlarmsPermission();
-        exactAlarmPermission = androidExactAlarmPermission ?? false;
-        debugPrint('NotificationService: Android Exact Alarm Permission Granted: $exactAlarmPermission');
-      }
-
-      debugPrint('✅ NotificationService: Permissions request finished. Notification: $notificationPermission, Exact Alarm (Android): $exactAlarmPermission');
-      return notificationPermission; // Retorna apenas a permissão de notificação geral
-    } catch (e) {
-      debugPrint('⚠️ NotificationService: Error requesting permissions explicitly: $e');
-      return false;
-    }
+    return statuses;
   }
 
-  static void _onDidReceiveLocalNotification(
-      int id, String? title, String? body, String? payload) {
-    debugPrint('NotificationService: Received foreground notification (iOS < 10): ID $id, Title $title');
-    // Aqui você pode adicionar lógica para lidar com a notificação recebida enquanto o app está aberto no iOS < 10
+  // --- MÉTODO PARA VERIFICAR PERMISSÕES USANDO PERMISSION_HANDLER --- 
+  static Future<bool> checkNotificationPermissionStatus() async {
+      PermissionStatus status = await Permission.notification.status;
+      debugPrint('NotificationService: Current Notification Permission Status: $status');
+      return status.isGranted;
   }
+
+  static Future<bool> checkExactAlarmPermissionStatus() async {
+      // scheduleExactAlarm só existe a partir de uma certa versão do Android.
+      // O permission_handler pode lidar com isso internamente ou retornar um status específico.
+      // Em versões anteriores, pode não ser aplicável e podemos considerar como 'concedido' por padrão.
+      // No entanto, para simplificar, vamos verificar o status diretamente.
+      PermissionStatus status = await Permission.scheduleExactAlarm.status;
+      debugPrint('NotificationService: Current Schedule Exact Alarm Permission Status: $status');
+      // Consideramos granted ou limited como suficiente para tentar agendar.
+      // 'limited' pode ocorrer em alguns cenários específicos.
+      return status.isGranted || status.isLimited; 
+  }
+
+  // Remover _onDidReceiveLocalNotification pois é específico do iOS < 10
+  // static void _onDidReceiveLocalNotification(...) { ... }
 
   static void _onNotificationTapped(NotificationResponse response) {
     debugPrint('👆 NotificationService: Notification tapped (foreground/background/terminated): Payload: ${response.payload}, ActionId: ${response.actionId}, Input: ${response.input}');
-    // Adicione aqui a lógica para navegar para a tela correta ou realizar ação com base no payload
+    // Lógica de navegação ou ação
   }
 
   @pragma('vm:entry-point')
   static void _onBackgroundNotificationTapped(NotificationResponse response) {
      debugPrint('♨️ NotificationService: Notification tapped (background isolate): Payload: ${response.payload}, ActionId: ${response.actionId}, Input: ${response.input}');
-     // Lógica para lidar com toque em notificação quando o app está em background (isolado)
-     // Cuidado: Acesso limitado a plugins e estado do app aqui.
+     // Lógica limitada aqui
   }
 
-  static Future<bool> _checkExactAlarmPermission() async {
-     if (!_initialized) return false;
-     try {
-        final androidImplementation = _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-        if (androidImplementation != null) {
-          // canScheduleExactNotifications retorna null se a permissão não foi concedida ou não é necessária (API < 31)
-          final bool? canSchedule = await androidImplementation.canScheduleExactNotifications();
-          debugPrint('NotificationService: Check Exact Alarm Permission Result: $canSchedule');
-          return canSchedule ?? false; // Retorna false se null (não concedido ou não aplicável)
-        }
-        return true; // Assume true para outras plataformas (iOS não tem esse conceito)
-     } catch (e) {
-        debugPrint('⚠️ NotificationService: Error checking exact alarm permission: $e');
-        return false;
-     }
-  }
-
+  // --- MÉTODO DE AGENDAMENTO ATUALIZADO --- 
   static Future<bool> scheduleNotification({
     required int id,
     required String title,
     required String description,
     required DateTime scheduledDate,
-    String? category, // Parâmetro category não está sendo usado aqui, mas mantido por consistência
+    String? category,
   }) async {
     debugPrint('NotificationService: Attempting to schedule notification ID $id...');
     if (!_initialized) {
@@ -152,112 +123,86 @@ class NotificationService {
       return false;
     }
 
+    // 1. Verificar permissão básica de notificação
+    bool hasNotificationPerm = await checkNotificationPermissionStatus();
+    if (!hasNotificationPerm) {
+        debugPrint('❌ NotificationService: Notification permission denied. Cannot schedule.');
+        // Considerar solicitar permissão aqui ou informar o usuário
+        // await requestCorePermissions(); // Poderia tentar solicitar novamente
+        return false;
+    }
+
+    // 2. Verificar permissão de alarme exato (Android 12+)
+    bool canScheduleExact = await checkExactAlarmPermissionStatus();
+    AndroidScheduleMode scheduleMode = canScheduleExact
+        ? AndroidScheduleMode.exactAllowWhileIdle
+        : AndroidScheduleMode.inexactAllowWhileIdle; // Fallback para inexato se não permitido
+    debugPrint('NotificationService: Scheduling with ${canScheduleExact ? "EXACT" : "INEXACT" } alarm mode.');
+
     try {
       final now = tz.TZDateTime.now(tz.local);
       final tzScheduledDate = tz.TZDateTime.from(scheduledDate, tz.local);
 
-      // Permitir agendar para alguns segundos no passado para evitar falhas por pequenas diferenças de tempo
-      if (tzScheduledDate.isBefore(now.subtract(const Duration(seconds: 10)))) {
-        debugPrint('⚠️ NotificationService: Scheduled date $tzScheduledDate is too far in the past. Now: $now');
-        return false; // Não agendar se for muito antigo
+      if (tzScheduledDate.isBefore(now.subtract(const Duration(seconds: 5)))) { // Pequena margem
+        debugPrint('⚠️ NotificationService: Scheduled date $tzScheduledDate is in the past. Now: $now');
+        return false;
       }
       if (title.trim().isEmpty) {
         debugPrint('❌ NotificationService: Title cannot be empty.');
         return false;
       }
 
-      final bool canScheduleExact = await _checkExactAlarmPermission();
-      AndroidScheduleMode scheduleMode = canScheduleExact
-          ? AndroidScheduleMode.exactAllowWhileIdle
-          : AndroidScheduleMode.inexactAllowWhileIdle;
-      debugPrint('NotificationService: Scheduling with ${canScheduleExact ? "EXACT" : "INEXACT" } alarm mode.');
-
       const androidDetails = AndroidNotificationDetails(
-        'reminder_channel_id', // ID do canal
-        'Lembretes Importantes', // Nome do canal visível ao usuário
+        'reminder_channel_id', 
+        'Lembretes Importantes', 
         channelDescription: 'Canal para notificações de lembretes agendados.',
         importance: Importance.max,
         priority: Priority.high,
-        ticker: 'ticker', // Texto que aparece brevemente na barra de status
+        ticker: 'ticker',
         playSound: true,
         enableVibration: true,
-        enableLights: true,
-        ledColor: Colors.blue, // Cor do LED (se suportado)
-        ledOnMs: 1000,
-        ledOffMs: 500,
-        visibility: NotificationVisibility.public, // Visível na tela de bloqueio
-        // actions: [], // Pode adicionar ações aqui se necessário
+        // enableLights: true, // Luzes podem não funcionar em todos aparelhos
+        // ledColor: Colors.blue,
+        // ledOnMs: 1000,
+        // ledOffMs: 500,
+        visibility: NotificationVisibility.public,
       );
 
-      // const iosDetails = DarwinNotificationDetails( // REMOVIDO - unused_local_variable
-      //   presentAlert: true,
-      //   presentBadge: true,
-      //   presentSound: true,
-      //   // subtitle: 'Subtítulo opcional',
-      //   // threadIdentifier: 'lembretes',
-      // );
-
-      // CORREÇÃO: Usar DarwinNotificationDetails diretamente no NotificationDetails
+      // Remover detalhes do iOS
       const notificationDetails = NotificationDetails(
         android: androidDetails,
-        iOS: DarwinNotificationDetails( // Adicionado aqui
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
+        // iOS: null, // Remover iOS
       );
 
       debugPrint('NotificationService: Scheduling notification ID $id for $tzScheduledDate with title "$title" (Mode: $scheduleMode)');
       await _notifications.zonedSchedule(
         id,
         title.trim(),
-        description.trim().isEmpty ? title.trim() : description.trim(), // Corpo não pode ser vazio
+        description.trim().isEmpty ? title.trim() : description.trim(),
         tzScheduledDate,
         notificationDetails,
         androidScheduleMode: scheduleMode,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        payload: 'reminder_$id|${title.trim()}', // Payload útil para identificar a notificação
-        matchDateTimeComponents: null, // Não repetir baseado em data/hora
+        payload: 'reminder_$id|${title.trim()}',
+        matchDateTimeComponents: null,
       );
 
       debugPrint('✅ NotificationService: Notification ID $id scheduled successfully for $tzScheduledDate.');
-      await debugInfo(); // Logar estado após agendamento
+      await debugInfo();
       return true;
     } catch (e, s) {
       debugPrint('❌ NotificationService: Error scheduling notification ID $id: $e');
       debugPrint('Stack trace: $s');
       if (e.toString().contains('permission') || e.toString().contains('exact_alarms_not_permitted')) {
           debugPrint('NotificationService: Scheduling failed likely due to permissions.');
-          // Considerar pedir permissão novamente ou informar o usuário
+          // Informar o usuário ou tentar abrir configurações
+          // await openAppSettings(); // Usar permission_handler
       }
       return false;
     }
   }
 
-  // Função para agendamento recorrente (exemplo básico, pode precisar de mais lógica)
-  static Future<bool> scheduleRecurringNotification({
-    required int id,
-    required String title,
-    required String description,
-    required DateTime scheduledDate, // Primeira ocorrência
-    required RepeatInterval repeatInterval,
-    String? category,
-  }) async {
-    debugPrint('NotificationService: Scheduling RECURRING notification ID $id for first occurrence at $scheduledDate, repeating ${repeatInterval.name}');
-    // A lógica de recorrência pode ser mais complexa (ex: calcular próxima data)
-    // Por simplicidade, vamos apenas agendar a primeira ocorrência aqui.
-    // O app precisaria reagendar após cada notificação disparada.
-    return await scheduleNotification(
-      id: id,
-      title: title,
-      description: description,
-      scheduledDate: scheduledDate,
-      category: category,
-    );
-    // Para recorrência real com flutter_local_notifications, você usaria `periodicallyShow` ou
-    // reagendaria manualmente após cada `onDidReceiveNotificationResponse`.
-  }
-
+  // Manter funções de cancelamento e listagem
   static Future<void> cancelNotification(int id) async {
     if (!_initialized) return;
     debugPrint('NotificationService: Canceling notification ID $id...');
@@ -292,42 +237,7 @@ class NotificationService {
     }
   }
 
-  static Future<bool> hasScheduledNotification(int id) async {
-    if (!_initialized) return false;
-    try {
-      final notifications = await getScheduledNotifications();
-      return notifications.any((notification) => notification.id == id);
-    } catch (e) {
-      debugPrint('❌ NotificationService: Error checking for notification ID $id: $e');
-      return false;
-    }
-  }
-
-  // Checa permissões de forma mais robusta (exemplo)
-  static Future<bool> checkNotificationPermissions() async {
-     if (!_initialized) return false;
-     try {
-       // iOS
-       final iosImplementation = _notifications.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
-       if (iosImplementation != null) {
-         // No iOS >= 10, requestPermissions retorna o status atual se já concedido
-         final bool? iosPermissions = await iosImplementation.requestPermissions(alert: true, badge: true, sound: true);
-         return iosPermissions ?? false;
-       }
-       // Android
-       final androidImplementation = _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-       if (androidImplementation != null) {
-         // requestNotificationsPermission também pode retornar o status atual
-         final bool? androidPermissions = await androidImplementation.requestNotificationsPermission();
-         return androidPermissions ?? false;
-       }
-       return false; // Plataforma não suportada
-     } catch (e) {
-       debugPrint('⚠️ NotificationService: Error checking notification permissions: $e');
-       return false;
-     }
-  }
-
+  // --- MÉTODO DE DEBUG ATUALIZADO --- 
   static Future<void> debugInfo() async {
     if (!_initialized) {
        debugPrint('🔍 DEBUG NOTIFICAÇÕES: Service not initialized.');
@@ -335,20 +245,19 @@ class NotificationService {
     }
     try {
       final scheduled = await getScheduledNotifications();
-      final canScheduleExact = await _checkExactAlarmPermission();
-      final hasNotificationPermission = await checkNotificationPermissions();
+      final hasNotificationPermission = await checkNotificationPermissionStatus();
+      final canScheduleExact = await checkExactAlarmPermissionStatus();
 
-      debugPrint('🔍 DEBUG NOTIFICAÇÕES:');
+      debugPrint('🔍 DEBUG NOTIFICAÇÕES (Android Focus):');
       debugPrint('   - Inicializado: ✅');
       debugPrint('   - Permissão de Notificação: ${hasNotificationPermission ? "✅" : "❌"}');
-      debugPrint('   - Pode agendar alarmes exatos (Android): ${canScheduleExact ? "✅" : "❌"}');
+      debugPrint('   - Pode agendar alarmes exatos: ${canScheduleExact ? "✅" : "❌"}');
       debugPrint('   - Agendadas (${scheduled.length}):');
 
       if (scheduled.isEmpty) {
         debugPrint('     - Nenhuma notificação agendada.');
       } else {
         for (final notification in scheduled) {
-          // Usar toString() para obter mais detalhes se disponível
           debugPrint('     - ID: ${notification.id} | Título: ${notification.title} | Payload: ${notification.payload}');
         }
       }
@@ -357,32 +266,33 @@ class NotificationService {
     }
   }
 
-  // Abre as configurações de notificação do app ou tenta pedir permissão novamente
-  static Future<void> openNotificationSettingsOrRequest() async {
-    debugPrint('NotificationService: Attempting to open settings or request permission...');
-    try {
-      // Tenta pedir permissão primeiro
-      bool granted = await requestPermissionsIfNeeded();
-      if (!granted) {
-        debugPrint('NotificationService: Permissions not granted after request. Opening settings might be needed (manual implementation required).');
-        // Abrir configurações do app (requer platform channels ou plugin como `permission_handler`)
-        // Exemplo com permission_handler (se estivesse instalado):
-        // await openAppSettings();
-      } else {
-        debugPrint('NotificationService: Permissions seem to be granted.');
-      }
-    } catch (e) {
-      debugPrint('❌ NotificationService: Error trying to request permissions/open settings: $e');
+  // --- MÉTODO PARA ABRIR CONFIGURAÇÕES USANDO PERMISSION_HANDLER --- 
+  static Future<void> openSettingsAndRequestPermissions() async {
+    debugPrint('NotificationService: Checking permissions and potentially opening settings...');
+    Map<Permission, PermissionStatus> statuses = await requestCorePermissions();
+    
+    bool allGranted = statuses.values.every((status) => status.isGranted || status.isLimited);
+
+    if (!allGranted) {
+        debugPrint('NotificationService: Not all permissions granted. Opening app settings...');
+        bool didOpen = await openAppSettings(); // Função do permission_handler
+        if (!didOpen) {
+            debugPrint('NotificationService: Could not open app settings.');
+            // Informar o usuário que ele precisa habilitar manualmente
+        }
+    } else {
+        debugPrint('NotificationService: All required permissions seem to be granted.');
     }
   }
 
+  // Manter função de teste
   static Future<void> scheduleTestNotification(int seconds) async {
     debugPrint('NotificationService: Scheduling TEST notification in $seconds seconds...');
     final now = DateTime.now();
     await scheduleNotification(
-      id: 9999, // ID fixo para teste
+      id: 9999, 
       title: '🔔 Teste de Notificação 🔔',
-      description: 'Esta é uma notificação de teste agendada para ${seconds}s após ${DateFormat.Hms().format(now)}.', // Corrigido: DateFormat agora está importado
+      description: 'Esta é uma notificação de teste agendada para ${seconds}s após ${DateFormat.Hms().format(now)}.',
       scheduledDate: now.add(Duration(seconds: seconds)),
     );
   }

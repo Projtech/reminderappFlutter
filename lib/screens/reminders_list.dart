@@ -11,6 +11,7 @@ import 'manage_categories_screen.dart';
 import '../database/category_helper.dart';
 // Importa o main para acessar a função de troca de tema
 import '../main.dart';
+import 'package:flutter/foundation.dart'; // Para debugPrint
 
 class RemindersListScreen extends StatefulWidget {
   const RemindersListScreen({super.key});
@@ -27,9 +28,9 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
   List<Reminder> _filteredReminders = [];
   bool _isLoading = true;
   bool _isSearching = false;
-  String? _selectedCategory;
-  List<String> _categories = [];
-  Map<String, Color> _categoryColorMap = {}; // Mapa para guardar cores das categorias
+  String? _selectedCategory; // Armazena o nome normalizado (lowercase, trimmed)
+  List<String> _normalizedCategories = []; // Lista de nomes normalizados
+  Map<String, Color> _categoryColorMap = {}; // Chave: nome normalizado
 
   // Getter to calculate the date exactly 7 days from now (start of that day)
   DateTime get weekFromNow {
@@ -55,9 +56,29 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
     _filterReminders();
   }
 
+  // Função auxiliar para garantir que o hex da cor tenha o alfa
+  Color _parseColorHex(String hex, String categoryName) {
+    String hexUpper = hex.toUpperCase().replaceAll('#', '');
+    if (hexUpper.length == 6) {
+      // Adiciona FF (alfa opaco) se não estiver presente
+      hexUpper = 'FF$hexUpper';
+    }
+    if (hexUpper.length != 8) {
+      debugPrint("*** ERRO: Hex inválido '$hex' para categoria '$categoryName'. Usando Cinza padrão. ***");
+      return Colors.grey; // Retorna cinza se ainda for inválido
+    }
+    try {
+      return Color(int.parse(hexUpper, radix: 16));
+    } catch (e) {
+      debugPrint("*** ERRO ao parsear hex '$hexUpper' para categoria '$categoryName': $e. Usando Cinza padrão. ***");
+      return Colors.grey;
+    }
+  }
+
   Future<void> _loadReminders() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
+    // debugPrint("[RemindersList] Iniciando _loadReminders..."); // Removido debug
     try {
       // Carrega lembretes e categorias em paralelo
       final results = await Future.wait([
@@ -67,37 +88,44 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
 
       final reminders = results[0] as List<Reminder>;
       final categoryData = results[1] as List<Map<String, dynamic>>;
+      // debugPrint("[RemindersList] Categorias carregadas do DB: $categoryData"); // Removido debug
 
       // Processa categorias e cria o mapa de cores
-      final categories = <String>{};
-      final categoryColorMap = <String, Color>{};
+      final normalizedCategoriesSet = <String>{};
+      final tempCategoryColorMap = <String, Color>{};
       for (final catMap in categoryData) {
-        final name = catMap['name'] as String;
-        final colorHex = catMap['color'] as String;
-        categories.add(name);
-        try {
-          // CORREÇÃO: Parsear diretamente AARRGGBB
-          categoryColorMap[name] = Color(int.parse(colorHex, radix: 16));
-        } catch (e) {
-          debugPrint('Erro ao parsear cor $colorHex para categoria $name: $e');
-          categoryColorMap[name] = Colors.grey; // Cor padrão em caso de erro
-        }
+        final originalName = catMap['name'] as String? ?? '';
+        final normalizedName = originalName.trim().toLowerCase();
+        if (normalizedName.isEmpty) continue;
+
+        final colorHex = catMap['color'] as String? ?? 'FF808080'; // Cinza padrão
+        normalizedCategoriesSet.add(normalizedName);
+        // *** CORREÇÃO: Usar função auxiliar para parsear e garantir alfa ***
+        tempCategoryColorMap[normalizedName] = _parseColorHex(colorHex, normalizedName);
       }
+      // debugPrint("[RemindersList] Mapa de cores final: $tempCategoryColorMap"); // Removido debug
+      // debugPrint("[RemindersList] Nomes normalizados: ${normalizedCategoriesSet.toList()}"); // Removido debug
 
       if (!mounted) return;
       setState(() {
-        _reminders = reminders;
-        _categories = categories.toList()..sort();
-        _categoryColorMap = categoryColorMap; // Atualiza o mapa de cores
+        _reminders = reminders.map((r) => r.copyWith(category: r.category.trim().toLowerCase())).toList();
+        _normalizedCategories = normalizedCategoriesSet.toList()..sort();
+        _categoryColorMap = tempCategoryColorMap;
+
+        if (_selectedCategory != null && !_normalizedCategories.contains(_selectedCategory)) {
+          _selectedCategory = null;
+        }
+
         _sortReminders();
         _filterReminders();
         _isLoading = false;
       });
+      // debugPrint("[RemindersList] _loadReminders concluído."); // Removido debug
     } catch (e) {
-      debugPrint('Erro ao carregar lembretes ou categorias: $e');
+      debugPrint('*** ERRO FATAL ao carregar lembretes ou categorias: $e ***');
       if (!mounted) return;
       setState(() => _isLoading = false);
-      // TODO: Mostrar mensagem de erro para o usuário
+      // TODO: Mostrar mensagem de erro
     }
   }
 
@@ -115,11 +143,11 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
       _filteredReminders = _reminders.where((reminder) {
         final matchesSearch = _searchController.text.isEmpty ||
             reminder.title.toLowerCase().contains(_searchController.text.toLowerCase()) ||
-            reminder.description.toLowerCase().contains(_searchController.text.toLowerCase());
-        
-        final matchesCategory = _selectedCategory == null || 
+            (reminder.description?.toLowerCase() ?? '').contains(_searchController.text.toLowerCase());
+
+        final matchesCategory = _selectedCategory == null ||
             reminder.category == _selectedCategory;
-        
+
         return matchesSearch && matchesCategory;
       }).toList();
     });
@@ -135,7 +163,6 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
       appBar: AppBar(
         backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey[100],
         elevation: 0,
-        // Adiciona o ícone do menu hambúrguer que abre o Drawer
         leading: Builder(
           builder: (context) => IconButton(
             icon: const Icon(Icons.menu),
@@ -174,43 +201,52 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
           if (!_isSearching)
             PopupMenuButton<String>(
               icon: const Icon(Icons.filter_list),
-              onSelected: (category) {
+              onSelected: (categoryValue) {
+                // debugPrint("[RemindersList] Filtro selecionado: '$categoryValue'"); // Removido debug
                 setState(() {
-                  _selectedCategory = category == 'all' ? null : category;
+                  _selectedCategory = categoryValue == 'all' ? null : categoryValue;
                   _filterReminders();
                 });
               },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'all',
-                  child: Text('Todas as categorias'),
-                ),
-                const PopupMenuDivider(),
-                ..._categories.map((category) => PopupMenuItem(
-                  value: category,
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          // CORREÇÃO: Usar _categoryColorMap para a cor correta
-                          color: _categoryColorMap[category] ?? Colors.grey,
-                          shape: BoxShape.circle,
+              itemBuilder: (context) {
+                 // debugPrint("[RemindersList] Construindo itens do menu de filtro..."); // Removido debug
+                 // debugPrint("[RemindersList] Categorias normalizadas para menu: $_normalizedCategories"); // Removido debug
+                 // debugPrint("[RemindersList] Mapa de cores para menu: $_categoryColorMap"); // Removido debug
+                 return [
+                    const PopupMenuItem(
+                      value: 'all',
+                      child: Text('Todas as categorias'),
+                    ),
+                    const PopupMenuDivider(),
+                    ..._normalizedCategories.map((normalizedCategory) {
+                      // *** CORREÇÃO: Usar cor padrão cinza se não encontrar ***
+                      final Color color = _categoryColorMap[normalizedCategory] ?? Colors.grey;
+                      // debugPrint("[RemindersList] Item do filtro: '$normalizedCategory', Cor encontrada: $color"); // Removido debug
+                      return PopupMenuItem(
+                        value: normalizedCategory,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: color, // Cor já deve estar opaca
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(normalizedCategory),
+                          ],
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(category),
-                    ],
-                  ),
-                )),
-              ],
+                      );
+                    }),
+                 ];
+              },
             ),
         ],
       ),
       body: Column(
         children: [
-          // Lista de lembretes
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -232,12 +268,10 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
         backgroundColor: Colors.blue,
         child: const Icon(Icons.add),
       ),
-      // Adiciona o Drawer ao Scaffold
       drawer: _buildDrawer(),
     );
   }
 
-  // Método para construir o Drawer
   Widget _buildDrawer() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Drawer(
@@ -256,8 +290,7 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
               ),
             ),
           ),
-          // ListTile com Switch para alternar tema
-          ListTile( // Corrige o typo ListTil -> ListTile
+          ListTile(
             leading: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
             title: Text(isDark ? 'Modo Claro' : 'Modo Escuro'),
             trailing: Switch(
@@ -270,19 +303,18 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
               final newMode = isDark ? ThemeMode.light : ThemeMode.dark;
               MyApp.of(context)?.changeTheme(newMode);
             },
-          ), // Adiciona a vírgula que faltava
-          // Separa as opções de Importar e Exportar
+          ),
           ListTile(
-            leading: const Icon(Icons.file_download), // Ícone para importar
+            leading: const Icon(Icons.file_download),
             title: const Text("Importar Backup"),
             onTap: () async {
               Navigator.pop(context);
               print("Importar Backup");
-              // TODO: Implementar lógica de IMPORTAR backup usando file_picker
+              // TODO: Implementar lógica de IMPORTAR backup
             },
           ),
           ListTile(
-            leading: const Icon(Icons.file_upload), // Ícone para exportar
+            leading: const Icon(Icons.file_upload),
             title: const Text("Exportar Backup"),
             onTap: () async {
               Navigator.pop(context);
@@ -290,12 +322,13 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
               // TODO: Implementar lógica de EXPORTAR backup
             },
           ),
-          ListTile( // Garante que este ListTile está correto
+          ListTile(
             leading: const Icon(Icons.notifications_active),
             title: const Text('Autorizar Notificações'),
             onTap: () {
               Navigator.pop(context);
-              print('Autorizar Notificações');
+              NotificationService.openSettingsAndRequestPermissions();
+              print('Abrindo configurações de permissão...');
             },
           ),
           ListTile(
@@ -307,19 +340,18 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
                 context,
                 MaterialPageRoute(builder: (context) => const ManageCategoriesScreen()),
               ).then((_) {
-                _loadReminders(); 
+                _loadReminders(); // Recarrega ao voltar da tela de categorias
               });
             },
           ),
-        ], // Fecha a lista de children
-      ), // Fecha o ListView
-    ); // Fecha o Drawer
-  } // Fecha o método _buildDrawer
+        ],
+      ),
+    );
+  }
 
-  // Garante espaço antes do próximo método
   Widget _buildStatCard(String label, int count, IconData icon, Color color) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Container(
       decoration: BoxDecoration(
         color: isDark ? Colors.grey[900] : Colors.white,
@@ -360,7 +392,10 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
   Widget _buildReminderItem(Reminder reminder) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isOverdue = reminder.dateTime.isBefore(DateTime.now()) && !reminder.isCompleted;
-    
+    final categoryNormalized = reminder.category;
+    // *** CORREÇÃO: Usar cor padrão cinza se não encontrar ***
+    final categoryColor = _categoryColorMap[categoryNormalized] ?? Colors.grey;
+
     return Dismissible(
       key: Key(reminder.id.toString()),
       direction: DismissDirection.endToStart,
@@ -386,9 +421,9 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
           color: isDark ? Colors.grey[900] : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: reminder.isCompleted 
+            color: reminder.isCompleted
                 ? Colors.green.withOpacity(0.3)
-                : isOverdue 
+                : isOverdue
                     ? Colors.red.withOpacity(0.3)
                     : Colors.transparent,
             width: 1,
@@ -402,33 +437,31 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
             style: TextStyle(
               fontWeight: FontWeight.w500,
               decoration: reminder.isCompleted ? TextDecoration.lineThrough : null,
-              color: reminder.isCompleted 
+              color: reminder.isCompleted
                   ? (isDark ? Colors.grey[600] : Colors.grey[500])
                   : null,
             ),
           ),
-          subtitle: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  // Usa a cor do mapa, com opacidade. Usa cinza se não encontrar.
-                  color: (_categoryColorMap[reminder.category] ?? Colors.grey).withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  reminder.category,
-                  style: TextStyle(
-                    fontSize: 11,
-                    // Usa a cor do mapa (sólida). Usa cinza se não encontrar.
-                    color: _categoryColorMap[reminder.category] ?? Colors.grey,
-                  ),
-                ),
-              ),
-              // Adiciona espaço se houver mais informações no subtítulo no futuro
-              // const SizedBox(width: 8),
-            ],
-          ),
+          subtitle: categoryNormalized.isNotEmpty
+              ? Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: categoryColor.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        categoryNormalized,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: categoryColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : null,
           trailing: Switch(
             value: reminder.notificationsEnabled && !reminder.isCompleted,
             onChanged: reminder.isCompleted ? null : (value) {
@@ -441,26 +474,9 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
     );
   }
 
-  Color _getCategoryColor(String category) {
-    switch (category.toLowerCase()) {
-      case 'trabalho':
-        return Colors.blue;
-      case 'pessoal':
-        return Colors.purple;
-      case 'estudos':
-        return Colors.orange;
-      case 'saúde':
-        return Colors.green;
-      case 'finanças':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
-  }
-
   Widget _buildEmptyState() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -487,7 +503,10 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
 
   void _showReminderDetails(Reminder reminder) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+    final categoryNormalized = reminder.category;
+    // *** CORREÇÃO: Usar cor padrão cinza se não encontrar ***
+    final categoryColor = _categoryColorMap[categoryNormalized] ?? Colors.grey;
+
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -522,8 +541,8 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-              
-              if (reminder.description.isNotEmpty) ...[
+
+              if (reminder.description != null && reminder.description!.isNotEmpty) ...[
                 Text(
                   'Descrição',
                   style: TextStyle(
@@ -534,27 +553,27 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  reminder.description,
+                  reminder.description!,
                   style: const TextStyle(fontSize: 16),
                 ),
                 const SizedBox(height: 16),
               ],
-              
+
               _buildDetailRow(
                 Icons.access_time,
                 'Data e Hora',
                 DateFormat('dd/MM/yyyy - HH:mm').format(reminder.dateTime),
               ),
               const SizedBox(height: 12),
-              
+
               _buildDetailRow(
                 Icons.category,
                 'Categoria',
-                reminder.category,
-                color: _getCategoryColor(reminder.category),
+                categoryNormalized,
+                color: categoryColor,
               ),
               const SizedBox(height: 12),
-              
+
               _buildDetailRow(
                 reminder.isCompleted ? Icons.check_circle : Icons.circle_outlined,
                 'Status',
@@ -562,14 +581,14 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
                 color: reminder.isCompleted ? Colors.green : Colors.orange,
               ),
               const SizedBox(height: 12),
-              
+
               _buildDetailRow(
                 Icons.notifications,
                 'Notificações',
                 reminder.notificationsEnabled ? 'Ativadas' : 'Desativadas',
                 color: reminder.notificationsEnabled ? Colors.blue : Colors.grey,
               ),
-              
+
               if (reminder.isRecurring) ...[
                 const SizedBox(height: 12),
                 _buildDetailRow(
@@ -579,9 +598,9 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
                   color: Colors.purple,
                 ),
               ],
-              
+
               const SizedBox(height: 24),
-              
+
               Row(
                 children: [
                   Expanded(
@@ -591,34 +610,33 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
                         _toggleComplete(reminder);
                       },
                       icon: Icon(
-                        reminder.isCompleted 
-                            ? Icons.circle_outlined 
+                        reminder.isCompleted
+                            ? Icons.circle_outlined
                             : Icons.check_circle,
                       ),
                       label: Text(
-                        reminder.isCompleted 
-                            ? 'Reabrir' 
+                        reminder.isCompleted
+                            ? 'Reabrir'
                             : 'Concluir',
                       ),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: reminder.isCompleted 
-                            ? Colors.orange 
+                        foregroundColor: reminder.isCompleted
+                            ? Colors.orange
                             : Colors.green,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),                  Expanded(
+                  const SizedBox(width: 12),
+                  Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () {
-                        Navigator.pop(context); // Fecha o dialog de detalhes
-                        // Navega para a tela de edição, passando o lembrete
+                        Navigator.pop(context); // Fecha o dialog
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (context) => AddReminderScreen(reminderToEdit: reminder),
                           ),
                         ).then((result) {
-                          // Recarrega os lembretes se algo foi salvo na tela de edição
                           if (result == true) {
                             _loadReminders();
                           }
@@ -627,7 +645,7 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
                       icon: const Icon(Icons.edit),
                       label: const Text("Editar"),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.blue, // Cor para o botão Editar
+                        foregroundColor: Colors.blue,
                       ),
                     ),
                   ),
@@ -639,9 +657,10 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
       ),
     );
   }
+
   Widget _buildDetailRow(IconData icon, String label, String value, {Color? color}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Row(
       children: [
         Icon(
@@ -679,7 +698,6 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
         r.dateTime.month,
         r.dateTime.day,
       );
-      // Check if the reminder date is the same day as today and not completed
       return reminderDate.isAtSameMomentAs(today) && !r.isCompleted;
     }).length;
   }
@@ -687,7 +705,6 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
   int _getWeekCount() {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    // weekFromNow getter already provides the correct end date (start of day 7 days from now)
 
     return _reminders.where((r) {
       final reminderDate = DateTime(
@@ -695,7 +712,6 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
         r.dateTime.month,
         r.dateTime.day,
       );
-      // Check if the reminder date is after today but before a week from now, and not completed
       return reminderDate.isAfter(today) && reminderDate.isBefore(weekFromNow) && !r.isCompleted;
     }).length;
   }
@@ -736,25 +752,23 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
   }
 
   void _addReminder() async {
-    // Navega para AddReminderScreen e aguarda o retorno
-    await Navigator.push(
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => const AddReminderScreen(),
       ),
     );
-    // Sempre recarrega os lembretes após retornar da tela de adição
-    // Isso garante que a lista seja atualizada mesmo que a tela AddReminderScreen
-    // não retorne um valor específico ou se o usuário simplesmente voltar.
-    _loadReminders();
+    if (result == true) {
+      _loadReminders();
+    }
   }
 
   void _deleteReminder(Reminder reminder) async {
     await _databaseHelper.deleteReminder(reminder.id!);
     await NotificationService.cancelNotification(reminder.id!);
-    
+
     _loadReminders();
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -763,6 +777,15 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
             label: 'Desfazer',
             onPressed: () async {
               await _databaseHelper.insertReminder(reminder);
+              if (reminder.notificationsEnabled && !reminder.isCompleted && reminder.dateTime.isAfter(DateTime.now())) {
+                 await NotificationService.scheduleNotification(
+                    id: reminder.id!,
+                    title: reminder.title,
+                    description: reminder.description,
+                    scheduledDate: reminder.dateTime,
+                    category: reminder.category,
+                 );
+              }
               _loadReminders();
             },
           ),
@@ -774,42 +797,46 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
   void _toggleComplete(Reminder reminder) async {
     final updated = reminder.copyWith(isCompleted: !reminder.isCompleted);
     await _databaseHelper.updateReminder(updated);
-    
+
     if (updated.isCompleted) {
       await NotificationService.cancelNotification(reminder.id!);
     } else if (updated.notificationsEnabled) {
-      await NotificationService.scheduleNotification(
-        id: updated.id!,
-        title: updated.title,
-        description: updated.description,
-        scheduledDate: updated.dateTime,
-        category: updated.category,
-      );
+      if (updated.dateTime.isAfter(DateTime.now())) {
+        await NotificationService.scheduleNotification(
+          id: updated.id!,
+          title: updated.title,
+          description: updated.description,
+          scheduledDate: updated.dateTime,
+          category: updated.category,
+        );
+      }
     }
-    
+
     _loadReminders();
   }
 
   void _toggleNotifications(Reminder reminder, bool enabled) async {
     HapticFeedback.lightImpact();
-    
+
     final updated = reminder.copyWith(notificationsEnabled: enabled);
     await _databaseHelper.updateReminder(updated);
-    
+
     if (enabled && !reminder.isCompleted) {
-      await NotificationService.scheduleNotification(
-        id: reminder.id!,
-        title: reminder.title,
-        description: reminder.description,
-        scheduledDate: reminder.dateTime,
-        category: reminder.category,
-      );
+      if (reminder.dateTime.isAfter(DateTime.now())) {
+         await NotificationService.scheduleNotification(
+           id: reminder.id!,
+           title: reminder.title,
+           description: reminder.description,
+           scheduledDate: reminder.dateTime,
+           category: reminder.category,
+         );
+      }
     } else {
       await NotificationService.cancelNotification(reminder.id!);
     }
-    
+
     _loadReminders();
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -822,3 +849,4 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
     }
   }
 }
+
