@@ -1,18 +1,25 @@
-import 'package:flutter/services.dart';
+import 'dart:typed_data'; // <-- ADICIONAR IMPORT
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart'; // Importar permission_handler
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:intl/intl.dart';
+import 'package:flutter_timezone/flutter_timezone.dart'; // Importar flutter_timezone
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
   static bool _initialized = false;
+  static const String _channelId = 'reminder_channel_id';
+  static const String _channelName = 'Lembretes Importantes';
+  static const String _channelDescription = 'Canal para notificações de lembretes agendados.';
 
   static Future<void> initialize() async {
-    if (_initialized) return;
+    if (_initialized) {
+      debugPrint('NotificationService: Already initialized.');
+      return;
+    }
     try {
       debugPrint('NotificationService: Initializing...');
       tz.initializeTimeZones();
@@ -21,18 +28,16 @@ class NotificationService {
         tz.setLocalLocation(tz.getLocation(currentTimeZone));
         debugPrint('NotificationService: Timezone initialized to $currentTimeZone');
       } catch (e) {
-        debugPrint('❌ NotificationService: Failed to get/set local timezone: $e. Using default.');
+        debugPrint('❌ NotificationService: Failed to get/set local timezone: $e. Using default UTC.');
         tz.setLocalLocation(tz.getLocation('UTC'));
       }
 
-      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-      // Remover configurações específicas de iOS, já que o foco é Android
-      // const iosSettings = DarwinInitializationSettings(...);
+      // --- CRIAÇÃO EXPLÍCITA DO CANAL ANDROID --- 
+      await _createAndroidNotificationChannel();
 
-      const settings = InitializationSettings(
-        android: androidSettings,
-        // iOS: iosSettings, // Remover iOS
-      );
+      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      // Remover configurações específicas de iOS
+      const settings = InitializationSettings(android: androidSettings);
 
       final bool? didInitialize = await _notifications.initialize(
         settings,
@@ -44,6 +49,8 @@ class NotificationService {
       if (didInitialize ?? false) {
         _initialized = true;
         debugPrint('✅ NotificationService: Initialized successfully.');
+        // Limpar notificações antigas ou inválidas na inicialização (opcional, mas pode ajudar)
+        // await _cleanupOldNotifications(); 
       } else {
         debugPrint('❌ NotificationService: Initialization failed.');
         _initialized = false;
@@ -52,6 +59,31 @@ class NotificationService {
       debugPrint('❌ NotificationService: Error initializing notifications: $e');
       debugPrint('Stack trace: $s');
       _initialized = false;
+    }
+  }
+
+  // --- MÉTODO PARA CRIAR O CANAL ANDROID (COM IMPORTANCE.HIGH E SOM PADRÃO) --- 
+  static Future<void> _createAndroidNotificationChannel() async {
+    // <-- AJUSTE: Manter Importance.high -->
+    const androidChannel = AndroidNotificationChannel(
+      _channelId,
+      _channelName,
+      description: _channelDescription,
+      importance: Importance.defaultImportance, // Manter high
+      playSound: true, // Manter som habilitado
+      // <-- AJUSTE: Remover definição explícita de som para usar padrão -->
+      // sound: RawResourceAndroidNotificationSound('notification'), // Remover se houver
+      enableVibration: true,
+      showBadge: true,
+    );
+    try {
+       await _notifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(androidChannel);
+       debugPrint('✅ NotificationService: Android channel "$_channelId" created/updated with Importance.high (using default sound).');
+    } catch (e) {
+       debugPrint('❌ NotificationService: Failed to create/update Android channel: $e');
     }
   }
 
@@ -84,32 +116,24 @@ class NotificationService {
   }
 
   static Future<bool> checkExactAlarmPermissionStatus() async {
-      // scheduleExactAlarm só existe a partir de uma certa versão do Android.
-      // O permission_handler pode lidar com isso internamente ou retornar um status específico.
-      // Em versões anteriores, pode não ser aplicável e podemos considerar como 'concedido' por padrão.
-      // No entanto, para simplificar, vamos verificar o status diretamente.
       PermissionStatus status = await Permission.scheduleExactAlarm.status;
       debugPrint('NotificationService: Current Schedule Exact Alarm Permission Status: $status');
       // Consideramos granted ou limited como suficiente para tentar agendar.
-      // 'limited' pode ocorrer em alguns cenários específicos.
       return status.isGranted || status.isLimited; 
   }
 
-  // Remover _onDidReceiveLocalNotification pois é específico do iOS < 10
-  // static void _onDidReceiveLocalNotification(...) { ... }
-
   static void _onNotificationTapped(NotificationResponse response) {
     debugPrint('👆 NotificationService: Notification tapped (foreground/background/terminated): Payload: ${response.payload}, ActionId: ${response.actionId}, Input: ${response.input}');
-    // Lógica de navegação ou ação
+    // TODO: Implementar lógica de navegação ou ação baseada no payload
   }
 
   @pragma('vm:entry-point')
   static void _onBackgroundNotificationTapped(NotificationResponse response) {
      debugPrint('♨️ NotificationService: Notification tapped (background isolate): Payload: ${response.payload}, ActionId: ${response.actionId}, Input: ${response.input}');
-     // Lógica limitada aqui
+     // Lógica limitada aqui, idealmente apenas marcação ou processamento leve.
   }
 
-  // --- MÉTODO DE AGENDAMENTO ATUALIZADO --- 
+  // --- MÉTODO DE AGENDAMENTO ATUALIZADO (COM LOGS EXTRAS) --- 
   static Future<bool> scheduleNotification({
     required int id,
     required String title,
@@ -117,7 +141,7 @@ class NotificationService {
     required DateTime scheduledDate,
     String? category,
   }) async {
-    debugPrint('NotificationService: Attempting to schedule notification ID $id...');
+    debugPrint('NotificationService: Attempting to schedule notification ID $id for $scheduledDate...');
     if (!_initialized) {
       debugPrint('❌ NotificationService: Cannot schedule, service not initialized.');
       return false;
@@ -126,9 +150,7 @@ class NotificationService {
     // 1. Verificar permissão básica de notificação
     bool hasNotificationPerm = await checkNotificationPermissionStatus();
     if (!hasNotificationPerm) {
-        debugPrint('❌ NotificationService: Notification permission denied. Cannot schedule.');
-        // Considerar solicitar permissão aqui ou informar o usuário
-        // await requestCorePermissions(); // Poderia tentar solicitar novamente
+        debugPrint('❌ NotificationService: Notification permission denied for ID $id. Cannot schedule.');
         return false;
     }
 
@@ -137,44 +159,51 @@ class NotificationService {
     AndroidScheduleMode scheduleMode = canScheduleExact
         ? AndroidScheduleMode.exactAllowWhileIdle
         : AndroidScheduleMode.inexactAllowWhileIdle; // Fallback para inexato se não permitido
-    debugPrint('NotificationService: Scheduling with ${canScheduleExact ? "EXACT" : "INEXACT" } alarm mode.');
+    debugPrint('NotificationService: Scheduling ID $id with ${canScheduleExact ? "EXACT" : "INEXACT" } alarm mode.');
 
     try {
-      final now = tz.TZDateTime.now(tz.local);
-      final tzScheduledDate = tz.TZDateTime.from(scheduledDate, tz.local);
+      final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
+      final tz.TZDateTime tzScheduledDate = tz.TZDateTime.from(scheduledDate, tz.local);
 
-      if (tzScheduledDate.isBefore(now.subtract(const Duration(seconds: 5)))) { // Pequena margem
-        debugPrint('⚠️ NotificationService: Scheduled date $tzScheduledDate is in the past. Now: $now');
+      // Adicionar verificação mais robusta para datas passadas
+      if (tzScheduledDate.isBefore(now.subtract(const Duration(seconds: 2)))) { 
+        debugPrint('❌ NotificationService: Scheduled date $tzScheduledDate for ID $id is in the past (Now: $now). Skipping schedule.');
         return false;
       }
       if (title.trim().isEmpty) {
-        debugPrint('❌ NotificationService: Title cannot be empty.');
+        debugPrint('❌ NotificationService: Title cannot be empty for ID $id. Skipping schedule.');
         return false;
       }
 
-      const androidDetails = AndroidNotificationDetails(
-        'reminder_channel_id', 
-        'Lembretes Importantes', 
-        channelDescription: 'Canal para notificações de lembretes agendados.',
-        importance: Importance.max,
+      // Usar o channelId definido na classe
+      final androidDetails = AndroidNotificationDetails(
+        _channelId, 
+        _channelName, 
+        channelDescription: _channelDescription,
+        importance: Importance.high, // Manter high
         priority: Priority.high,
         ticker: 'ticker',
         playSound: true,
+        sound: null, // Usar padrão
         enableVibration: true,
-        // enableLights: true, // Luzes podem não funcionar em todos aparelhos
-        // ledColor: Colors.blue,
-        // ledOnMs: 1000,
-        // ledOffMs: 500,
         visibility: NotificationVisibility.public,
+        additionalFlags: Int32List.fromList([4]), // FLAG_SHOW_WHEN
       );
 
-      // Remover detalhes do iOS
-      const notificationDetails = NotificationDetails(
-        android: androidDetails,
-        // iOS: null, // Remover iOS
-      );
+      final notificationDetails = NotificationDetails(android: androidDetails);
 
-      debugPrint('NotificationService: Scheduling notification ID $id for $tzScheduledDate with title "$title" (Mode: $scheduleMode)');
+      // <-- LOG ADICIONAL -->
+      debugPrint('NotificationService: AndroidDetails for ID $id:');
+      debugPrint('  - channelId: ${androidDetails.channelId}');
+      debugPrint('  - channelName: ${androidDetails.channelName}');
+      debugPrint('  - importance: ${androidDetails.importance.toString()}');
+      debugPrint('  - priority: ${androidDetails.priority.toString()}');
+      debugPrint('  - playSound: ${androidDetails.playSound}');
+      debugPrint('  - sound: ${androidDetails.sound == null ? "Default (null)" : androidDetails.sound.toString()}');
+      debugPrint('  - enableVibration: ${androidDetails.enableVibration}');
+      // <-- FIM LOG ADICIONAL -->
+
+      debugPrint('NotificationService: Calling zonedSchedule for ID $id at $tzScheduledDate with title "$title" (Mode: $scheduleMode)');
       await _notifications.zonedSchedule(
         id,
         title.trim(),
@@ -188,15 +217,13 @@ class NotificationService {
       );
 
       debugPrint('✅ NotificationService: Notification ID $id scheduled successfully for $tzScheduledDate.');
-      await debugInfo();
+      await debugInfo(); // Log do status após agendar
       return true;
     } catch (e, s) {
       debugPrint('❌ NotificationService: Error scheduling notification ID $id: $e');
       debugPrint('Stack trace: $s');
       if (e.toString().contains('permission') || e.toString().contains('exact_alarms_not_permitted')) {
-          debugPrint('NotificationService: Scheduling failed likely due to permissions.');
-          // Informar o usuário ou tentar abrir configurações
-          // await openAppSettings(); // Usar permission_handler
+          debugPrint('NotificationService: Scheduling failed likely due to permissions for ID $id.');
       }
       return false;
     }
@@ -248,19 +275,22 @@ class NotificationService {
       final hasNotificationPermission = await checkNotificationPermissionStatus();
       final canScheduleExact = await checkExactAlarmPermissionStatus();
 
-      debugPrint('🔍 DEBUG NOTIFICAÇÕES (Android Focus):');
+      debugPrint('🔍 --- DEBUG NOTIFICAÇÕES (Android Focus) ---');
       debugPrint('   - Inicializado: ✅');
-      debugPrint('   - Permissão de Notificação: ${hasNotificationPermission ? "✅" : "❌"}');
-      debugPrint('   - Pode agendar alarmes exatos: ${canScheduleExact ? "✅" : "❌"}');
+      debugPrint('   - Permissão de Notificação: ${hasNotificationPermission ? "✅ Granted" : "❌ Denied/Unknown"}');
+      debugPrint('   - Pode agendar alarmes exatos: ${canScheduleExact ? "✅ Granted/Limited" : "❌ Denied/Unknown"}');
       debugPrint('   - Agendadas (${scheduled.length}):');
 
       if (scheduled.isEmpty) {
         debugPrint('     - Nenhuma notificação agendada.');
       } else {
         for (final notification in scheduled) {
-          debugPrint('     - ID: ${notification.id} | Título: ${notification.title} | Payload: ${notification.payload}');
+          String details = '';
+          debugPrint('     - ID: ${notification.id} | Título: ${notification.title} | Payload: ${notification.payload}$details');
         }
       }
+      debugPrint('🔍 --- FIM DEBUG NOTIFICAÇÕES ---');
+
     } catch (e) {
       debugPrint('❌ NotificationService: Error getting debug info: $e');
     }
@@ -278,7 +308,6 @@ class NotificationService {
         bool didOpen = await openAppSettings(); // Função do permission_handler
         if (!didOpen) {
             debugPrint('NotificationService: Could not open app settings.');
-            // Informar o usuário que ele precisa habilitar manualmente
         }
     } else {
         debugPrint('NotificationService: All required permissions seem to be granted.');
@@ -296,21 +325,6 @@ class NotificationService {
       scheduledDate: now.add(Duration(seconds: seconds)),
     );
   }
-}
 
-// Classe auxiliar para obter timezone (mantida como estava)
-class FlutterTimezone {
-  static const MethodChannel _channel =
-      MethodChannel('flutter_timezone');
-
-  static Future<String> getLocalTimezone() async {
-    try {
-       final String timezone = await _channel.invokeMethod('getLocalTimezone');
-       return timezone;
-    } catch (e) {
-       debugPrint('FlutterTimezone: Failed to get timezone: $e. Returning UTC.');
-       return 'UTC';
-    }
-  }
 }
 
