@@ -290,6 +290,8 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
               ),
             ),
           ),
+          
+          // ✅ SEÇÃO DE CONFIGURAÇÕES BÁSICAS
           ListTile(
             leading: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
             title: Text(isDark ? 'Modo Claro' : 'Modo Escuro'),
@@ -304,33 +306,7 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
               MyApp.of(context)?.changeTheme(newMode);
             },
           ),
-          ListTile(
-            leading: const Icon(Icons.file_download),
-            title: const Text("Importar Backup"),
-            onTap: () async {
-              Navigator.pop(context);
-              print("Importar Backup");
-              // TODO: Implementar lógica de IMPORTAR backup
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.file_upload),
-            title: const Text("Exportar Backup"),
-            onTap: () async {
-              Navigator.pop(context);
-              print("Exportar Backup");
-              // TODO: Implementar lógica de EXPORTAR backup
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.notifications_active),
-            title: const Text('Autorizar Notificações'),
-            onTap: () {
-              Navigator.pop(context);
-              NotificationService.openSettingsAndRequestPermissions();
-              print('Abrindo configurações de permissão...');
-            },
-          ),
+          
           ListTile(
             leading: const Icon(Icons.category),
             title: const Text('Gerenciar Categorias'),
@@ -344,6 +320,157 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
               });
             },
           ),
+          
+          const Divider(),
+          
+          // ✅ SEÇÃO DE BACKUP
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(
+              'BACKUP',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+              ),
+            ),
+          ),
+          
+          ListTile(
+            leading: const Icon(Icons.file_download),
+            title: const Text("Importar Backup"),
+            onTap: () async {
+              Navigator.pop(context);
+              print("Importar Backup");
+              // TODO: Implementar lógica de IMPORTAR backup
+            },
+          ),
+          
+          ListTile(
+            leading: const Icon(Icons.file_upload),
+            title: const Text("Exportar Backup"),
+            onTap: () async {
+              Navigator.pop(context);
+              print("Exportar Backup");
+              // TODO: Implementar lógica de EXPORTAR backup
+            },
+          ),
+          
+          const Divider(),
+          
+          // ✅ SEÇÃO DE NOTIFICAÇÕES E TESTES
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(
+              'NOTIFICAÇÕES',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+              ),
+            ),
+          ),
+          
+          ListTile(
+            leading: const Icon(Icons.notifications_active),
+            title: const Text('Autorizar Notificações'),
+            onTap: () {
+              Navigator.pop(context);
+              NotificationService.openSettingsAndRequestPermissions();
+              print('Abrindo configurações de permissão...');
+            },
+          ),
+          
+          ListTile(
+            leading: const Icon(Icons.settings),
+            title: const Text('📋 Ver Configurações'),
+            subtitle: const Text('Configurações obrigatórias do Motorola'),
+            onTap: () async {
+              Navigator.pop(context);
+              await NotificationService.checkMotorolaSettings();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Configurações exibidas no console'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+          ),
+          
+          ListTile(
+            leading: const Icon(Icons.battery_saver),
+            title: const Text('🔋 Configurar Bateria'),
+            subtitle: const Text('Desabilitar otimização de bateria'),
+            onTap: () async {
+              Navigator.pop(context);
+              await NotificationService.requestBatteryOptimizationDisable();
+            },
+          ),
+          
+          const Divider(),
+          
+          // ✅ SEÇÃO DE TESTES
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(
+              'TESTES DE NOTIFICAÇÃO',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+              ),
+            ),
+          ),
+          
+          ListTile(
+            leading: const Icon(Icons.minimize, color: Colors.orange),
+            title: const Text('🧪 Teste 1: App Minimizado'),
+            subtitle: const Text('Teste com app minimizado (10s)'),
+            onTap: () async {
+              Navigator.pop(context);
+              await NotificationService.testeGradualNotificacoes();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Teste agendado! Minimize o app e aguarde 10s'),
+                  duration: Duration(seconds: 4),
+                ),
+              );
+            },
+          ),
+          
+          ListTile(
+            leading: const Icon(Icons.close, color: Colors.red),
+            title: const Text('🧪 Teste 2: App Fechado'),
+            subtitle: const Text('Teste com app completamente fechado (15s)'),
+            onTap: () async {
+              Navigator.pop(context);
+              await NotificationService.testeComAppFechado();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Teste agendado! Feche o app e aguarde 15s'),
+                  duration: Duration(seconds: 4),
+                ),
+              );
+            },
+          ),
+          
+          ListTile(
+            leading: const Icon(Icons.lightbulb, color: Colors.blue),
+            title: const Text('🧪 Teste 3: Heads-Up Display'),
+            subtitle: const Text('Teste de popup na tela (8s)'),
+            onTap: () async {
+              Navigator.pop(context);
+              await NotificationService.testeComTelaLigada();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Teste agendado! Mantenha a tela ligada e minimize'),
+                  duration: Duration(seconds: 4),
+                ),
+              );
+            },
+          ),
+          
+          const SizedBox(height: 16),
         ],
       ),
     );
@@ -849,4 +976,3 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
     }
   }
 }
-

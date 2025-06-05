@@ -60,7 +60,7 @@ class _MyAppState extends State<MyApp> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('theme_mode', themeMode == ThemeMode.dark ? 'dark' : 'light');
   }
-
+  
   @override
   Widget build(BuildContext context) {
     final lightTheme = ThemeData(
