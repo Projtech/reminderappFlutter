@@ -255,7 +255,6 @@ class _ManageCategoriesScreenState extends State<ManageCategoriesScreen> {
                       // Adiciona 'FF' para opacidade total ao parsear RRGGBB
                       color = Color(int.parse('FF$colorHex', radix: 16));
                     } catch (e) {
-                      debugPrint('Erro ao parsear cor $colorHex para categoria $categoryName na lista: $e');
                     }
 
                     bool canDelete = categoryName != 'Geral';

@@ -5,7 +5,7 @@ import '../database/database_helper.dart';
 import '../models/reminder.dart';
 import '../services/notification_service.dart';
 import 'dart:async'; // Para Timer
-import 'package:flutter/foundation.dart'; // Para debugPrint
+// Para debugPrint
 
 class AddReminderScreen extends StatefulWidget {
   final Reminder? reminderToEdit;
@@ -68,7 +68,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     if (_isEditing) {
       final reminder = widget.reminderToEdit!;
       _titleController.text = reminder.title;
-      _descriptionController.text = reminder.description ?? '';
+      _descriptionController.text = reminder.description;
       _selectedDateTime = reminder.dateTime;
       _selectedCategory = reminder.category.trim().toLowerCase();
       _isRecurring = reminder.isRecurring;
@@ -251,6 +251,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
+            // ignore: deprecated_member_use
             color: theme.shadowColor.withOpacity(0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
@@ -293,6 +294,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
+            // ignore: deprecated_member_use
             color: theme.shadowColor.withOpacity(0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
@@ -421,6 +423,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
+            // ignore: deprecated_member_use
             color: theme.shadowColor.withOpacity(0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
@@ -444,6 +447,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
             value: _isRecurring,
             onChanged: (value) => setState(() => _isRecurring = value),
             activeColor: colorScheme.primary,
+            // ignore: deprecated_member_use
             inactiveTrackColor: colorScheme.onSurface.withOpacity(0.38),
           ),
         ],
@@ -463,6 +467,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
+            // ignore: deprecated_member_use
             color: theme.shadowColor.withOpacity(0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
@@ -518,6 +523,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
+            // ignore: deprecated_member_use
             color: theme.shadowColor.withOpacity(0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
@@ -626,7 +632,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     showDialog(
       context: context,
       builder: (context) {
-        Color pickerColor = _selectedNewCategoryColor;
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
@@ -716,6 +721,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     try {
       // *** CORREÇÃO: Garantir formato AARRGGBB ao salvar ***
       final colorHex =
+          // ignore: deprecated_member_use
           color.value.toRadixString(16).padLeft(8, '0').toUpperCase();
 
       await _categoryHelper.addCategory(normalizedName, colorHex);

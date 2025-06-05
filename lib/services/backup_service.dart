@@ -65,7 +65,6 @@ class BackupService {
       return outputFile;
 
     } catch (e) {
-      debugPrint('❌ Erro ao exportar backup: $e');
       // Adicionando verificação explícita de 'mounted' antes de usar o context após await
       if (context.mounted) {
          _showSnackBar(context, 'Erro ao exportar backup: ${e.toString()}', Colors.red);
@@ -114,7 +113,6 @@ class BackupService {
            if (name != null && color != null) {
              await _catHelper.addCategory(name, color);
            } else {
-             debugPrint("Categoria inválida no backup (nome ou cor nulos): $categoryMap");
            }
         }
       }
@@ -131,7 +129,6 @@ class BackupService {
             category: reminder.category,
           );
         } catch (e) {
-           debugPrint("Erro ao importar lembrete individual: $reminderMap - Erro: $e");
         }
       }
 
@@ -142,7 +139,6 @@ class BackupService {
       return true;
 
     } catch (e) {
-      debugPrint('❌ Erro ao importar backup: $e');
       // Adicionando verificação explícita de 'mounted' antes de usar o context após await
       if (context.mounted) {
          _showSnackBar(context, 'Erro ao importar backup: ${e.toString()}', Colors.red);

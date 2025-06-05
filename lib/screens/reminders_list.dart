@@ -11,7 +11,6 @@ import 'manage_categories_screen.dart';
 import '../database/category_helper.dart';
 // Importa o main para acessar a função de troca de tema
 import '../main.dart';
-import 'package:flutter/foundation.dart'; // Para debugPrint
 
 class RemindersListScreen extends StatefulWidget {
   const RemindersListScreen({super.key});
@@ -64,13 +63,11 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
       hexUpper = 'FF$hexUpper';
     }
     if (hexUpper.length != 8) {
-      debugPrint("*** ERRO: Hex inválido '$hex' para categoria '$categoryName'. Usando Cinza padrão. ***");
       return Colors.grey; // Retorna cinza se ainda for inválido
     }
     try {
       return Color(int.parse(hexUpper, radix: 16));
     } catch (e) {
-      debugPrint("*** ERRO ao parsear hex '$hexUpper' para categoria '$categoryName': $e. Usando Cinza padrão. ***");
       return Colors.grey;
     }
   }
@@ -78,7 +75,6 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
   Future<void> _loadReminders() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
-    // debugPrint("[RemindersList] Iniciando _loadReminders..."); // Removido debug
     try {
       // Carrega lembretes e categorias em paralelo
       final results = await Future.wait([
@@ -88,7 +84,6 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
 
       final reminders = results[0] as List<Reminder>;
       final categoryData = results[1] as List<Map<String, dynamic>>;
-      // debugPrint("[RemindersList] Categorias carregadas do DB: $categoryData"); // Removido debug
 
       // Processa categorias e cria o mapa de cores
       final normalizedCategoriesSet = <String>{};
@@ -103,8 +98,6 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
         // *** CORREÇÃO: Usar função auxiliar para parsear e garantir alfa ***
         tempCategoryColorMap[normalizedName] = _parseColorHex(colorHex, normalizedName);
       }
-      // debugPrint("[RemindersList] Mapa de cores final: $tempCategoryColorMap"); // Removido debug
-      // debugPrint("[RemindersList] Nomes normalizados: ${normalizedCategoriesSet.toList()}"); // Removido debug
 
       if (!mounted) return;
       setState(() {
@@ -120,12 +113,10 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
         _filterReminders();
         _isLoading = false;
       });
-      // debugPrint("[RemindersList] _loadReminders concluído."); // Removido debug
     } catch (e) {
-      debugPrint('*** ERRO FATAL ao carregar lembretes ou categorias: $e ***');
       if (!mounted) return;
       setState(() => _isLoading = false);
-      // TODO: Mostrar mensagem de erro
+      // Mostrar mensagem de erro seria implementado aqui
     }
   }
 
@@ -143,7 +134,7 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
       _filteredReminders = _reminders.where((reminder) {
         final matchesSearch = _searchController.text.isEmpty ||
             reminder.title.toLowerCase().contains(_searchController.text.toLowerCase()) ||
-            (reminder.description?.toLowerCase() ?? '').contains(_searchController.text.toLowerCase());
+            (reminder.description.toLowerCase().contains(_searchController.text.toLowerCase()));
 
         final matchesCategory = _selectedCategory == null ||
             reminder.category == _selectedCategory;
@@ -202,16 +193,12 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
             PopupMenuButton<String>(
               icon: const Icon(Icons.filter_list),
               onSelected: (categoryValue) {
-                // debugPrint("[RemindersList] Filtro selecionado: '$categoryValue'"); // Removido debug
                 setState(() {
                   _selectedCategory = categoryValue == 'all' ? null : categoryValue;
                   _filterReminders();
                 });
               },
               itemBuilder: (context) {
-                 // debugPrint("[RemindersList] Construindo itens do menu de filtro..."); // Removido debug
-                 // debugPrint("[RemindersList] Categorias normalizadas para menu: $_normalizedCategories"); // Removido debug
-                 // debugPrint("[RemindersList] Mapa de cores para menu: $_categoryColorMap"); // Removido debug
                  return [
                     const PopupMenuItem(
                       value: 'all',
@@ -221,7 +208,6 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
                     ..._normalizedCategories.map((normalizedCategory) {
                       // *** CORREÇÃO: Usar cor padrão cinza se não encontrar ***
                       final Color color = _categoryColorMap[normalizedCategory] ?? Colors.grey;
-                      // debugPrint("[RemindersList] Item do filtro: '$normalizedCategory', Cor encontrada: $color"); // Removido debug
                       return PopupMenuItem(
                         value: normalizedCategory,
                         child: Row(
@@ -341,8 +327,7 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
             title: const Text("Importar Backup"),
             onTap: () async {
               Navigator.pop(context);
-              print("Importar Backup");
-              // TODO: Implementar lógica de IMPORTAR backup
+              // Implementar lógica de IMPORTAR backup seria feito aqui
             },
           ),
           
@@ -351,14 +336,13 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
             title: const Text("Exportar Backup"),
             onTap: () async {
               Navigator.pop(context);
-              print("Exportar Backup");
-              // TODO: Implementar lógica de EXPORTAR backup
+              // Implementar lógica de EXPORTAR backup seria feito aqui
             },
           ),
           
           const Divider(),
           
-          // ✅ SEÇÃO DE NOTIFICAÇÕES E TESTES
+          // ✅ SEÇÃO DE NOTIFICAÇÕES
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
@@ -377,29 +361,12 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
             onTap: () {
               Navigator.pop(context);
               NotificationService.openSettingsAndRequestPermissions();
-              print('Abrindo configurações de permissão...');
-            },
-          ),
-          
-          ListTile(
-            leading: const Icon(Icons.settings),
-            title: const Text('📋 Ver Configurações'),
-            subtitle: const Text('Configurações obrigatórias do Motorola'),
-            onTap: () async {
-              Navigator.pop(context);
-              await NotificationService.checkMotorolaSettings();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Configurações exibidas no console'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
             },
           ),
           
           ListTile(
             leading: const Icon(Icons.battery_saver),
-            title: const Text('🔋 Configurar Bateria'),
+            title: const Text('🔋 Desativar otimização de bateria'),
             subtitle: const Text('Desabilitar otimização de bateria'),
             onTap: () async {
               Navigator.pop(context);
@@ -407,110 +374,7 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
             },
           ),
           
-          const Divider(),
-          
-          // ✅ SEÇÃO DE TESTES
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(
-              'TESTES DE NOTIFICAÇÃO',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
-              ),
-            ),
-          ),
-          
-          ListTile(
-            leading: const Icon(Icons.minimize, color: Colors.orange),
-            title: const Text('🧪 Teste 1: App Minimizado'),
-            subtitle: const Text('Teste com app minimizado (10s)'),
-            onTap: () async {
-              Navigator.pop(context);
-              await NotificationService.testeGradualNotificacoes();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Teste agendado! Minimize o app e aguarde 10s'),
-                  duration: Duration(seconds: 4),
-                ),
-              );
-            },
-          ),
-          
-          ListTile(
-            leading: const Icon(Icons.close, color: Colors.red),
-            title: const Text('🧪 Teste 2: App Fechado'),
-            subtitle: const Text('Teste com app completamente fechado (15s)'),
-            onTap: () async {
-              Navigator.pop(context);
-              await NotificationService.testeComAppFechado();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Teste agendado! Feche o app e aguarde 15s'),
-                  duration: Duration(seconds: 4),
-                ),
-              );
-            },
-          ),
-          
-          ListTile(
-            leading: const Icon(Icons.lightbulb, color: Colors.blue),
-            title: const Text('🧪 Teste 3: Heads-Up Display'),
-            subtitle: const Text('Teste de popup na tela (8s)'),
-            onTap: () async {
-              Navigator.pop(context);
-              await NotificationService.testeComTelaLigada();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Teste agendado! Mantenha a tela ligada e minimize'),
-                  duration: Duration(seconds: 4),
-                ),
-              );
-            },
-          ),
-          
           const SizedBox(height: 16),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatCard(String label, int count, IconData icon, Color color) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? Colors.grey[900] : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: color.withOpacity(0.3),
-          width: 1,
-        ),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 8),
-          Text(
-            count.toString(),
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: isDark ? Colors.grey[400] : Colors.grey[600],
-            ),
-            textAlign: TextAlign.center,
-            overflow: TextOverflow.ellipsis,
-          ),
         ],
       ),
     );
@@ -549,9 +413,9 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: reminder.isCompleted
-                ? Colors.green.withOpacity(0.3)
+                ? Colors.green.withValues(alpha: 0.3)
                 : isOverdue
-                    ? Colors.red.withOpacity(0.3)
+                    ? Colors.red.withValues(alpha: 0.3)
                     : Colors.transparent,
             width: 1,
           ),
@@ -575,7 +439,7 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: categoryColor.withOpacity(0.2),
+                        color: categoryColor.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -669,7 +533,7 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
               ),
               const SizedBox(height: 16),
 
-              if (reminder.description != null && reminder.description!.isNotEmpty) ...[
+              if (reminder.description.isNotEmpty) ...[
                 Text(
                   'Descrição',
                   style: TextStyle(
@@ -680,7 +544,7 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  reminder.description!,
+                  reminder.description,
                   style: const TextStyle(fontSize: 16),
                 ),
                 const SizedBox(height: 16),
@@ -813,43 +677,6 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
         ),
       ],
     );
-  }
-
-  int _getTodayCount() {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-
-    return _reminders.where((r) {
-      final reminderDate = DateTime(
-        r.dateTime.year,
-        r.dateTime.month,
-        r.dateTime.day,
-      );
-      return reminderDate.isAtSameMomentAs(today) && !r.isCompleted;
-    }).length;
-  }
-
-  int _getWeekCount() {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-
-    return _reminders.where((r) {
-      final reminderDate = DateTime(
-        r.dateTime.year,
-        r.dateTime.month,
-        r.dateTime.day,
-      );
-      return reminderDate.isAfter(today) && reminderDate.isBefore(weekFromNow) && !r.isCompleted;
-    }).length;
-  }
-
-  int _getOverdueCount() {
-    final now = DateTime.now();
-    return _reminders.where((r) => r.dateTime.isBefore(now) && !r.isCompleted).length;
-  }
-
-  int _getActiveCount() {
-    return _reminders.where((r) => !r.isCompleted).length;
   }
 
   Future<bool> _showDeleteConfirmation(Reminder reminder) async {
