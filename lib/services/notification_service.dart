@@ -154,10 +154,8 @@ class NotificationService {
         
         visibility: NotificationVisibility.public,
         category: AndroidNotificationCategory.alarm,
-        
-        timeoutAfter: 5000,
         autoCancel: true,
-        
+        ongoing: false,
         when: DateTime.now().millisecondsSinceEpoch,
         showWhen: true,
         ticker: title.trim(),
