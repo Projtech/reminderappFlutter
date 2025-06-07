@@ -12,10 +12,11 @@ class AddNoteScreen extends StatefulWidget {
 }
 
 class _AddNoteScreenState extends State<AddNoteScreen> {
-  final _formKey = GlobalKey<FormState>();
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
   final NoteHelper _noteHelper = NoteHelper();
+  
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -34,28 +35,86 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
   }
 
   Future<void> _saveNote() async {
-    if (_formKey.currentState!.validate()) {
-      final String title = _titleController.text;
-      final String content = _contentController.text;
+    final String title = _titleController.text.trim();
+    final String content = _contentController.text.trim();
 
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor, insira um título'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (content.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor, insira algum conteúdo'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
       if (widget.note == null) {
-        // New note
+        // Nova anotação
         final newNote = Note(
           title: title,
           content: content,
           createdAt: DateTime.now(),
         );
         await _noteHelper.insertNote(newNote);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Anotação criada com sucesso!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       } else {
-        // Update existing note
+        // Atualizar anotação existente
         final updatedNote = widget.note!.copyWith(
           title: title,
           content: content,
         );
         await _noteHelper.updateNote(updatedNote);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Anotação atualizada com sucesso!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       }
+      
       if (mounted) {
-        Navigator.pop(context, true); // Return true to indicate success
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao salvar: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
       }
     }
   }
@@ -72,70 +131,85 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
         backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey[100],
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.save),
-            onPressed: _saveNote,
-          ),
+          if (_isSaving)
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.check, size: 28),
+              onPressed: _saveNote,
+              color: Colors.green,
+            ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              TextFormField(
-                controller: _titleController,
-                decoration: InputDecoration(
-                  labelText: 'Título',
-                  hintText: 'Digite o título da anotação',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  filled: true,
-                  fillColor: isDark ? Colors.grey[800] : Colors.white,
-                ),
-                style: TextStyle(color: isDark ? Colors.white : Colors.black),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Por favor, insira um título';
-                  }
-                  return null;
-                },
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Campo de título
+            TextField(
+              controller: _titleController,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black87,
               ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: TextFormField(
-                  controller: _contentController,
-                  maxLines: null, // Allows multiple lines
-                  expands: true, // Takes all available vertical space
-                  textAlignVertical: TextAlignVertical.top,
-                  keyboardType: TextInputType.multiline,
-                  decoration: InputDecoration(
-                    labelText: 'Conteúdo',
-                    hintText: 'Digite o conteúdo da anotação',
-                    alignLabelWithHint: true,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    filled: true,
-                    fillColor: isDark ? Colors.grey[800] : Colors.white,
-                  ),
-                  style: TextStyle(color: isDark ? Colors.white : Colors.black),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor, insira algum conteúdo';
-                    }
-                    return null;
-                  },
+              decoration: InputDecoration(
+                hintText: 'Título da anotação',
+                hintStyle: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.grey[600] : Colors.grey[400],
                 ),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 8),
               ),
-            ],
-          ),
+              textCapitalization: TextCapitalization.sentences,
+              maxLines: null, // Permite múltiplas linhas no título se necessário
+            ),
+            
+            // Linha divisória sutil
+            Container(
+              height: 1,
+              color: isDark ? Colors.grey[700] : Colors.grey[300],
+              margin: const EdgeInsets.symmetric(vertical: 16),
+            ),
+            
+            // Campo de conteúdo
+            TextField(
+              controller: _contentController,
+              maxLines: null,
+              keyboardType: TextInputType.multiline,
+              textCapitalization: TextCapitalization.sentences,
+              style: TextStyle(
+                fontSize: 16,
+                height: 1.5,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Escreva sua anotação aqui...',
+                hintStyle: TextStyle(
+                  fontSize: 16,
+                  color: isDark ? Colors.grey[600] : Colors.grey[400],
+                ),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+              ),
+              minLines: 20, // Garante um espaço mínimo para escrever
+            ),
+            
+            // Espaço extra no final para garantir scroll
+            const SizedBox(height: 100),
+          ],
         ),
       ),
     );
   }
 }
-
-

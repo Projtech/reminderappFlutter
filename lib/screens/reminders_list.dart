@@ -4,6 +4,7 @@ import '../database/database_helper.dart';
 import '../models/reminder.dart';
 import 'add_reminder.dart';
 import '../services/notification_service.dart';
+import '../services/backup_service.dart'; // ✅ ADICIONADO: Import do backup service
 import 'package:intl/intl.dart';
 // Importa a tela de gerenciamento de categorias
 import 'manage_categories_screen.dart';
@@ -22,6 +23,7 @@ class RemindersListScreen extends StatefulWidget {
 class _RemindersListScreenState extends State<RemindersListScreen> {
   final DatabaseHelper _databaseHelper = DatabaseHelper();
   final CategoryHelper _categoryHelper = CategoryHelper(); // Adiciona helper de categoria
+  final BackupService _backupService = BackupService(); // ✅ ADICIONADO: Instância do backup service
   final TextEditingController _searchController = TextEditingController();
   List<Reminder> _reminders = [];
   List<Reminder> _filteredReminders = [];
@@ -142,6 +144,42 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
         return matchesSearch && matchesCategory;
       }).toList();
     });
+  }
+
+  // ✅ ADICIONADO: Função para exportar backup
+  Future<void> _exportBackup() async {
+    try {
+      await _backupService.exportBackup(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro inesperado: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // ✅ ADICIONADO: Função para importar backup
+  Future<void> _importBackup() async {
+    try {
+      final success = await _backupService.importBackup(context);
+      if (success && mounted) {
+        // Recarrega os lembretes após importar backup
+        await _loadReminders();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro inesperado: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -325,18 +363,18 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
           ListTile(
             leading: const Icon(Icons.file_download),
             title: const Text("Importar Backup"),
-            onTap: () async {
+            onTap: () {
               Navigator.pop(context);
-              // Implementar lógica de IMPORTAR backup seria feito aqui
+              _importBackup(); // ✅ CONECTADO: Chama função de importar
             },
           ),
           
           ListTile(
             leading: const Icon(Icons.file_upload),
             title: const Text("Exportar Backup"),
-            onTap: () async {
+            onTap: () {
               Navigator.pop(context);
-              // Implementar lógica de EXPORTAR backup seria feito aqui
+              _exportBackup(); // ✅ CONECTADO: Chama função de exportar
             },
           ),
           
@@ -379,6 +417,9 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
       ),
     );
   }
+
+  // [Resto do código permanece igual - _buildReminderItem, _buildEmptyState, _showReminderDetails, etc...]
+  // Mantenho o resto das funções exatamente como estava no arquivo original
 
   Widget _buildReminderItem(Reminder reminder) {
     final isDark = Theme.of(context).brightness == Brightness.dark;

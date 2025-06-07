@@ -4,8 +4,7 @@ import '../database/category_helper.dart';
 import '../database/database_helper.dart';
 import '../models/reminder.dart';
 import '../services/notification_service.dart';
-import 'dart:async'; // Para Timer
-// Para debugPrint
+import 'dart:async';
 
 class AddReminderScreen extends StatefulWidget {
   final Reminder? reminderToEdit;
@@ -21,43 +20,47 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _newCategoryController = TextEditingController();
+  final _customIntervalController = TextEditingController(); // ✅ NOVO
 
   late DateTime _selectedDateTime;
-  late String _selectedCategory; // Armazena o nome NORMALIZADO (lowercase, trimmed)
-  late bool _isRecurring;
+  late String _selectedCategory;
+  late String _selectedRecurrenceType; // ✅ NOVO: none, daily, weekly, monthly, custom_daily, custom_weekly, custom_monthly
+  late int _customInterval; // ✅ NOVO: para repetições personalizadas
+  late String _customUnit; // ✅ NOVO: days, weeks, months
+  
   bool _isEditing = false;
   bool _isLoadingCategories = true;
   bool _isCreatingCategory = false;
   bool _isSaving = false;
 
-  // Mapa: nome normalizado -> {originalName, colorHex, color}
   Map<String, Map<String, dynamic>> _categoriesMap = {};
-  List<String> _normalizedCategoryNames = []; // Lista de nomes normalizados para o dropdown
+  List<String> _normalizedCategoryNames = [];
 
   final DatabaseHelper _databaseHelper = DatabaseHelper();
   final CategoryHelper _categoryHelper = CategoryHelper();
   Color _selectedNewCategoryColor = Colors.grey;
 
   final List<Color> _predefinedColors = [
-    Colors.red,
-    Colors.pink,
-    Colors.purple,
-    Colors.deepPurple,
-    Colors.indigo,
-    Colors.blue,
-    Colors.lightBlue,
-    Colors.cyan,
-    Colors.teal,
-    Colors.green,
-    Colors.lightGreen,
-    Colors.lime,
-    Colors.yellow,
-    Colors.amber,
-    Colors.orange,
-    Colors.deepOrange,
-    Colors.brown,
-    Colors.grey,
-    Colors.blueGrey
+    Colors.red, Colors.pink, Colors.purple, Colors.deepPurple,
+    Colors.indigo, Colors.blue, Colors.lightBlue, Colors.cyan,
+    Colors.teal, Colors.green, Colors.lightGreen, Colors.lime,
+    Colors.yellow, Colors.amber, Colors.orange, Colors.deepOrange,
+    Colors.brown, Colors.grey, Colors.blueGrey
+  ];
+
+  // ✅ OPÇÕES DE REPETIÇÃO
+  final List<Map<String, String>> _recurrenceOptions = [
+    {'value': 'none', 'label': 'Não repetir'},
+    {'value': 'daily', 'label': 'Diariamente'},
+    {'value': 'weekly', 'label': 'Semanalmente'},
+    {'value': 'monthly', 'label': 'Mensalmente'},
+    {'value': 'custom', 'label': 'Personalizado'},
+  ];
+
+  final List<Map<String, String>> _customUnits = [
+    {'value': 'days', 'label': 'dias'},
+    {'value': 'weeks', 'label': 'semanas'},
+    {'value': 'months', 'label': 'meses'},
   ];
 
   @override
@@ -71,29 +74,53 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       _descriptionController.text = reminder.description;
       _selectedDateTime = reminder.dateTime;
       _selectedCategory = reminder.category.trim().toLowerCase();
-      _isRecurring = reminder.isRecurring;
+      
+      // ✅ CONFIGURAR REPETIÇÃO BASEADA NO LEMBRETE EXISTENTE
+      if (reminder.isRecurring && reminder.recurringType != null) {
+        _selectedRecurrenceType = reminder.recurringType!;
+        _customInterval = reminder.recurrenceInterval;
+        
+        // Determinar unidade para tipos customizados
+        if (reminder.recurringType!.startsWith('custom_')) {
+          if (reminder.recurringType == 'custom_daily') {
+            _customUnit = 'days';
+          } else if (reminder.recurringType == 'custom_weekly') {
+            _customUnit = 'weeks';
+          } else if (reminder.recurringType == 'custom_monthly') {
+            _customUnit = 'months';
+          }
+          _selectedRecurrenceType = 'custom'; // Para a interface
+        } else {
+          _customUnit = 'days';
+        }
+      } else {
+        _selectedRecurrenceType = 'none';
+        _customInterval = 1;
+        _customUnit = 'days';
+      }
     } else {
       _selectedDateTime = DateTime.now();
       _selectedCategory = '';
-      _isRecurring = false;
+      _selectedRecurrenceType = 'none';
+      _customInterval = 1;
+      _customUnit = 'days';
     }
+    
+    _customIntervalController.text = _customInterval.toString();
     _loadCategories();
   }
 
-  // Função auxiliar para garantir que o hex da cor tenha o alfa
   Color _parseColorHex(String hex, String categoryName) {
     String hexUpper = hex.toUpperCase().replaceAll('#', '');
     if (hexUpper.length == 6) {
       hexUpper = 'FF$hexUpper';
     }
     if (hexUpper.length != 8) {
-      debugPrint("*** ERRO: Hex inválido '$hex' para categoria '$categoryName'. Usando Cinza padrão. ***");
       return Colors.grey;
     }
     try {
       return Color(int.parse(hexUpper, radix: 16));
     } catch (e) {
-      debugPrint("*** ERRO ao parsear hex '$hexUpper' para categoria '$categoryName': $e. Usando Cinza padrão. ***");
       return Colors.grey;
     }
   }
@@ -113,14 +140,13 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         final normalizedName = originalName.trim().toLowerCase();
         if (normalizedName.isEmpty) continue;
 
-        final colorHex = catMap['color'] as String? ?? 'FF808080'; // Cinza padrão
-        // *** CORREÇÃO: Usar função auxiliar para parsear e garantir alfa ***
+        final colorHex = catMap['color'] as String? ?? 'FF808080';
         final color = _parseColorHex(colorHex, normalizedName);
 
         tempCategoriesMap[normalizedName] = {
           'originalName': originalName,
-          'colorHex': colorHex, // Mantém o hex original lido
-          'color': color, // Cor parseada e com alfa garantido
+          'colorHex': colorHex,
+          'color': color,
         };
         tempNormalizedNames.add(normalizedName);
       }
@@ -141,7 +167,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         _isLoadingCategories = false;
       });
     } catch (e) {
-      debugPrint('Erro ao carregar categorias: $e');
       if (!mounted) return;
       setState(() => _isLoadingCategories = false);
       _showMessage('Erro ao carregar categorias', Colors.red);
@@ -157,15 +182,13 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEditing ? 'Editar Lembrete' : 'Novo Lembrete'),
-        backgroundColor:
-            isDark ? colorScheme.surfaceContainerHighest : colorScheme.primary,
+        backgroundColor: isDark ? colorScheme.surfaceContainerHighest : colorScheme.primary,
         foregroundColor: isDark ? colorScheme.onSurface : colorScheme.onPrimary,
       ),
       body: _isSaving
           ? const Center(child: CircularProgressIndicator())
           : _buildMainContent(),
-      backgroundColor:
-          isDark ? colorScheme.surface : colorScheme.surfaceContainerLowest,
+      backgroundColor: isDark ? colorScheme.surface : colorScheme.surfaceContainerLowest,
     );
   }
 
@@ -223,7 +246,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
           const SizedBox(height: 16),
           _buildCategoryCard(),
           const SizedBox(height: 16),
-          _buildRecurringCard(),
+          _buildRecurrenceCard(), // ✅ NOVO CARD DE REPETIÇÃO
           const SizedBox(height: 16),
           _buildDateCard(),
           const SizedBox(height: 16),
@@ -235,6 +258,200 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     );
   }
 
+  // ✅ NOVO CARD DE REPETIÇÃO COMPLETO
+  Widget _buildRecurrenceCard() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            // ignore: deprecated_member_use
+            color: theme.shadowColor.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.repeat, color: colorScheme.primary, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Repetição',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.onSurface,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          
+          // Dropdown de tipo de repetição
+          DropdownButtonFormField<String>(
+            value: _selectedRecurrenceType,
+            style: TextStyle(color: colorScheme.onSurface),
+            dropdownColor: colorScheme.surfaceContainerHighest,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            items: _recurrenceOptions.map((option) {
+              return DropdownMenuItem(
+                value: option['value'],
+                child: Text(option['label']!),
+              );
+            }).toList(),
+            onChanged: (value) {
+              setState(() {
+                _selectedRecurrenceType = value!;
+                if (value != 'custom') {
+                  _customInterval = 1;
+                  _customIntervalController.text = '1';
+                }
+              });
+            },
+          ),
+          
+          // Seção personalizada (aparece só quando "Personalizado" está selecionado)
+          if (_selectedRecurrenceType == 'custom') ...[
+            const SizedBox(height: 16),
+            Text(
+              'Configuração Personalizada',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: colorScheme.onSurface,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text(
+                  'A cada',
+                  style: TextStyle(color: colorScheme.onSurface),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 1,
+                  child: TextFormField(
+                    controller: _customIntervalController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    ),
+                    validator: (value) {
+                      if (_selectedRecurrenceType == 'custom') {
+                        final interval = int.tryParse(value ?? '');
+                        if (interval == null || interval < 1) {
+                          return 'Min: 1';
+                        }
+                        // Limites máximos baseados na unidade
+                        if (_customUnit == 'days' && interval > 365) {
+                          return 'Max: 365';
+                        } else if (_customUnit == 'weeks' && interval > 52) {
+                          return 'Max: 52';
+                        } else if (_customUnit == 'months' && interval > 12) {
+                          return 'Max: 12';
+                        }
+                      }
+                      return null;
+                    },
+                    onChanged: (value) {
+                      final interval = int.tryParse(value);
+                      if (interval != null && interval > 0) {
+                        _customInterval = interval;
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: DropdownButtonFormField<String>(
+                    value: _customUnit,
+                    style: TextStyle(color: colorScheme.onSurface),
+                    dropdownColor: colorScheme.surfaceContainerHighest,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    ),
+                    items: _customUnits.map((unit) {
+                      return DropdownMenuItem(
+                        value: unit['value'],
+                        child: Text(unit['label']!),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _customUnit = value!;
+                        // Resetar intervalo para valores seguros
+                        if (value == 'months' && _customInterval > 12) {
+                          _customInterval = 12;
+                          _customIntervalController.text = '12';
+                        } else if (value == 'weeks' && _customInterval > 52) {
+                          _customInterval = 52;
+                          _customIntervalController.text = '52';
+                        } else if (value == 'days' && _customInterval > 365) {
+                          _customInterval = 365;
+                          _customIntervalController.text = '365';
+                        }
+                      });
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _getCustomRecurrencePreview(),
+              style: TextStyle(
+                fontSize: 12,
+                color: colorScheme.onSurfaceVariant,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _getCustomRecurrencePreview() {
+    if (_selectedRecurrenceType != 'custom') return '';
+    
+    final interval = _customInterval;
+    final unit = _customUnit;
+    
+    if (interval == 1) {
+      switch (unit) {
+        case 'days': return 'Repetir todos os dias';
+        case 'weeks': return 'Repetir toda semana';
+        case 'months': return 'Repetir todo mês';
+      }
+    }
+    
+    switch (unit) {
+      case 'days': return 'Repetir a cada $interval dias';
+      case 'weeks': return 'Repetir a cada $interval semanas';
+      case 'months': return 'Repetir a cada $interval meses';
+      default: return '';
+    }
+  }
+
+  // [Restante dos widgets buildSimpleCard, buildCategoryCard, etc. permanecem iguais...]
+  
   Widget _buildSimpleCard({
     required IconData icon,
     required String title,
@@ -342,8 +559,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                         CircularProgressIndicator(color: colorScheme.primary),
                         const SizedBox(height: 8),
                         Text('Carregando categorias...',
-                            style:
-                                TextStyle(color: colorScheme.onSurfaceVariant)),
+                            style: TextStyle(color: colorScheme.onSurfaceVariant)),
                       ],
                     ),
                   ),
@@ -376,7 +592,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       decoration: const InputDecoration(border: InputBorder.none),
       items: _normalizedCategoryNames.map((normalizedName) {
         final categoryData = _categoriesMap[normalizedName];
-        // *** CORREÇÃO: Usar cor padrão cinza se não encontrar ***
         final color = categoryData?['color'] as Color? ?? Colors.grey;
 
         return DropdownMenuItem(
@@ -387,7 +602,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                 width: 16,
                 height: 16,
                 decoration: BoxDecoration(
-                  color: color, // Cor já deve estar opaca
+                  color: color,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -408,50 +623,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
          }
          return null;
       },
-    );
-  }
-
-  Widget _buildRecurringCard() {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            // ignore: deprecated_member_use
-            color: theme.shadowColor.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.repeat, color: colorScheme.primary, size: 20),
-          const SizedBox(width: 8),
-          Text(
-            'Repetir Mensalmente',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: colorScheme.onSurface,
-              fontSize: 14,
-            ),
-          ),
-          const Spacer(),
-          Switch(
-            value: _isRecurring,
-            onChanged: (value) => setState(() => _isRecurring = value),
-            activeColor: colorScheme.primary,
-            // ignore: deprecated_member_use
-            inactiveTrackColor: colorScheme.onSurface.withOpacity(0.38),
-          ),
-        ],
-      ),
     );
   }
 
@@ -669,9 +840,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                               shape: BoxShape.circle,
                               border: _selectedNewCategoryColor == color
                                   ? Border.all(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurface,
+                                      color: Theme.of(context).colorScheme.onSurface,
                                       width: 2)
                                   : null,
                             ),
@@ -698,11 +867,9 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                         await _addCategory(normalizedName, _selectedNewCategoryColor);
                       }
                     } else if (normalizedName.isEmpty) {
-                      _showMessage('Nome da categoria não pode ser vazio',
-                          Colors.orange);
+                      _showMessage('Nome da categoria não pode ser vazio', Colors.orange);
                     } else {
-                      _showMessage('Nome da categoria muito longo (máx. 50)',
-                          Colors.orange);
+                      _showMessage('Nome da categoria muito longo (máx. 50)', Colors.orange);
                     }
                   },
                   child: const Text('Adicionar'),
@@ -719,11 +886,8 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     if (!mounted) return;
     setState(() => _isCreatingCategory = true);
     try {
-      // *** CORREÇÃO: Garantir formato AARRGGBB ao salvar ***
-      final colorHex =
-          // ignore: deprecated_member_use
-          color.value.toRadixString(16).padLeft(8, '0').toUpperCase();
-
+      // ignore: deprecated_member_use
+      final colorHex = color.value.toRadixString(16).padLeft(8, '0').toUpperCase();
       await _categoryHelper.addCategory(normalizedName, colorHex);
       await _loadCategories();
       if (mounted) {
@@ -734,7 +898,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         _showMessage('Categoria "$normalizedName" adicionada!', Colors.green);
       }
     } catch (e) {
-      debugPrint('Erro ao adicionar categoria: $e');
       if (mounted) {
         setState(() => _isCreatingCategory = false);
         _showMessage('Erro ao adicionar categoria', Colors.red);
@@ -742,6 +905,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     }
   }
 
+  // ✅ LÓGICA DE SALVAMENTO ATUALIZADA
   Future<void> _saveReminder() async {
     if (!_formKey.currentState!.validate()) {
       _showMessage('Por favor, corrija os erros no formulário.', Colors.orange);
@@ -756,28 +920,49 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     if (!mounted) return;
     setState(() => _isSaving = true);
 
-    final now = DateTime.now();
-    final finalDateTime = _selectedDateTime;
-
-    if (finalDateTime.isBefore(now.subtract(const Duration(seconds: 1)))) {
-      debugPrint(
-          "Aviso: Data/hora selecionada ($finalDateTime) está no passado. Notificação não será agendada.");
-    }
-
-    final reminder = Reminder(
-      id: _isEditing ? widget.reminderToEdit!.id : null,
-      title: _titleController.text.trim(),
-      description: _descriptionController.text.trim(),
-      category: _selectedCategory, // Salva nome normalizado
-      dateTime: finalDateTime,
-      isCompleted: _isEditing ? widget.reminderToEdit!.isCompleted : false,
-      isRecurring: _isRecurring,
-      recurringType: _isRecurring ? 'monthly' : null,
-      notificationsEnabled:
-          _isEditing ? widget.reminderToEdit!.notificationsEnabled : true,
-    );
-
     try {
+      // ✅ DETERMINAR TIPO DE REPETIÇÃO E INTERVALO
+      String finalRecurringType = 'none';
+      int finalInterval = 1;
+      bool isRecurring = false;
+
+      if (_selectedRecurrenceType != 'none') {
+        isRecurring = true;
+        
+        if (_selectedRecurrenceType == 'custom') {
+          // Repetição personalizada
+          switch (_customUnit) {
+            case 'days':
+              finalRecurringType = 'custom_daily';
+              break;
+            case 'weeks':
+              finalRecurringType = 'custom_weekly';
+              break;
+            case 'months':
+              finalRecurringType = 'custom_monthly';
+              break;
+          }
+          finalInterval = _customInterval;
+        } else {
+          // Repetição padrão
+          finalRecurringType = _selectedRecurrenceType;
+          finalInterval = 1;
+        }
+      }
+
+      final reminder = Reminder(
+        id: _isEditing ? widget.reminderToEdit!.id : null,
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        category: _selectedCategory,
+        dateTime: _selectedDateTime,
+        isCompleted: _isEditing ? widget.reminderToEdit!.isCompleted : false,
+        isRecurring: isRecurring,
+        recurringType: isRecurring ? finalRecurringType : null,
+        recurrenceInterval: finalInterval,
+        notificationsEnabled: _isEditing ? widget.reminderToEdit!.notificationsEnabled : true,
+      );
+
       int? savedId = reminder.id;
       if (_isEditing) {
         await _databaseHelper.updateReminder(reminder);
@@ -786,31 +971,12 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         reminder.id = savedId;
       }
 
+      // ✅ AGENDAR NOTIFICAÇÕES (MÚLTIPLAS SE RECORRENTE)
       if (savedId != null) {
         await NotificationService.cancelNotification(savedId);
-        if (reminder.notificationsEnabled &&
-            !reminder.isCompleted &&
-            finalDateTime.isAfter(now.subtract(const Duration(seconds: 5)))) {
-          if (reminder.isRecurring) {
-            DateTime nextOccurrence = reminder.getNextOccurrence();
-            debugPrint(
-                "Agendando notificação recorrente (próxima ocorrência) para: $nextOccurrence");
-            await NotificationService.scheduleNotification(
-              id: savedId,
-              title: "(Recorrente) ${reminder.title}",
-              description: reminder.description,
-              scheduledDate: nextOccurrence,
-              category: reminder.category,
-            );
-          } else {
-            await NotificationService.scheduleNotification(
-              id: savedId,
-              title: reminder.title,
-              description: reminder.description,
-              scheduledDate: reminder.dateTime,
-              category: reminder.category,
-            );
-          }
+        
+        if (reminder.notificationsEnabled && !reminder.isCompleted) {
+          await NotificationService.scheduleReminderNotifications(reminder);
         }
       }
 
@@ -818,7 +984,6 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         Navigator.pop(context, true);
       }
     } catch (e) {
-      debugPrint('❌ Erro ao salvar lembrete: $e');
       if (mounted) {
         setState(() => _isSaving = false);
         _showMessage('Erro ao salvar lembrete', Colors.red);
@@ -842,7 +1007,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     _titleController.dispose();
     _descriptionController.dispose();
     _newCategoryController.dispose();
+    _customIntervalController.dispose(); // ✅ NOVO
     super.dispose();
   }
 }
-

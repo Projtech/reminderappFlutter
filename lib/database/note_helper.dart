@@ -53,6 +53,12 @@ class NoteHelper {
     return List.generate(maps.length, (i) => Note.fromMap(maps[i]));
   }
 
+  // ✅ ADICIONADO: Método para obter todas as anotações como Maps (para backup)
+  Future<List<Map<String, dynamic>>> getAllNotesAsMaps() async {
+    final db = await database;
+    return await db.query('notes', orderBy: 'createdAt ASC'); // Ordem por criação para backup
+  }
+
   Future<int> updateNote(Note note) async {
     final db = await database;
     return await db.update(
@@ -67,6 +73,10 @@ class NoteHelper {
     final db = await database;
     return await db.delete('notes', where: 'id = ?', whereArgs: [id]);
   }
+
+  // ✅ ADICIONADO: Método para deletar todas as anotações (para importação de backup)
+  Future<int> deleteAllNotes() async {
+    final db = await database;
+    return await db.delete('notes');
+  }
 }
-
-

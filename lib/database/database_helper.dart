@@ -19,7 +19,7 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'reminders.db');
     return await openDatabase(
       path,
-      version: 3, // Mantém a versão 3
+      version: 4, // ✅ VERSÃO 4 para novo campo
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -36,6 +36,7 @@ class DatabaseHelper {
         isCompleted INTEGER NOT NULL DEFAULT 0,
         isRecurring INTEGER NOT NULL DEFAULT 0,
         recurringType TEXT,
+        recurrenceInterval INTEGER NOT NULL DEFAULT 1,
         notificationsEnabled INTEGER NOT NULL DEFAULT 1
       )
     ''');
@@ -49,11 +50,14 @@ class DatabaseHelper {
     if (oldVersion < 3) {
       await db.execute('ALTER TABLE reminders ADD COLUMN notificationsEnabled INTEGER NOT NULL DEFAULT 1');
     }
+    if (oldVersion < 4) {
+      // ✅ NOVA MIGRAÇÃO: Adicionar campo de intervalo
+      await db.execute('ALTER TABLE reminders ADD COLUMN recurrenceInterval INTEGER NOT NULL DEFAULT 1');
+    }
   }
 
   Future<int> insertReminder(Reminder reminder) async {
     final db = await database;
-    // Use insert instead of addReminder, as it's the standard name
     return await db.insert('reminders', reminder.toMap());
   }
 
@@ -64,7 +68,6 @@ class DatabaseHelper {
     return List.generate(maps.length, (i) => Reminder.fromMap(maps[i]));
   }
 
-  // ✅ ADICIONADO: Método para obter todos os lembretes como Maps (para backup)
   Future<List<Map<String, dynamic>>> getAllRemindersAsMaps() async {
     final db = await database;
     return await db.query('reminders');
@@ -85,25 +88,13 @@ class DatabaseHelper {
     return await db.delete('reminders', where: 'id = ?', whereArgs: [id]);
   }
 
-  // ✅ ADICIONADO: Método para deletar todos os lembretes (para importação de backup)
   Future<int> deleteAllReminders() async {
     final db = await database;
     return await db.delete('reminders');
   }
 
-  Future<int> createNextOccurrence(Reminder reminder) async {
-    final nextDate = reminder.getNextOccurrence();
-    final nextReminder = Reminder(
-      title: reminder.title,
-      description: reminder.description,
-      category: reminder.category,
-      dateTime: nextDate,
-      isRecurring: reminder.isRecurring,
-      recurringType: reminder.recurringType,
-      notificationsEnabled: reminder.notificationsEnabled,
-    );
-    return await insertReminder(nextReminder);
-  }
+  // ✅ REMOVIDO: método createNextOccurrence não é mais necessário
+  // O agendamento múltiplo é feito pelo NotificationService
 
   Future<int> getReminderCountByCategory(String categoryName) async {
     final db = await database;
@@ -113,5 +104,18 @@ class DatabaseHelper {
     );
     return Sqflite.firstIntValue(result) ?? 0;
   }
-}
 
+  // ✅ NOVO: Buscar lembretes recorrentes que precisam reagendar
+  Future<List<Reminder>> getRecurringRemindersNeedingReschedule() async {
+    final db = await database;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    
+    final List<Map<String, dynamic>> maps = await db.query(
+      'reminders',
+      where: 'isRecurring = 1 AND isCompleted = 0 AND notificationsEnabled = 1 AND dateTime < ?',
+      whereArgs: [now],
+    );
+    
+    return List.generate(maps.length, (i) => Reminder.fromMap(maps[i]));
+  }
+}

@@ -3,6 +3,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
 import 'services/notification_service.dart';
+import 'database/database_helper.dart'; // ✅ ADICIONAR
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -11,12 +12,56 @@ Future<void> main() async {
   // Inicializa o serviço de notificação SEM pedir permissão ainda
   await NotificationService.initialize();
 
+  // ✅ VERIFICAÇÃO CRÍTICA DE SEGURANÇA - SEMPRE EXECUTA
+  await _recheckRecurringRemindersOnStartup();
+
   // Carrega tema
   final prefs = await SharedPreferences.getInstance();
   final String? themeModeString = prefs.getString('theme_mode');
   ThemeMode initialThemeMode = (themeModeString == 'dark') ? ThemeMode.dark : ThemeMode.light;
 
   runApp(MyApp(initialThemeMode: initialThemeMode));
+}
+
+// ✅ FUNÇÃO DE SEGURANÇA CRÍTICA
+Future<void> _recheckRecurringRemindersOnStartup() async {
+  try {
+    final databaseHelper = DatabaseHelper();
+    final recurringReminders = await databaseHelper.getRecurringRemindersNeedingReschedule();
+    
+    if (recurringReminders.isEmpty) {
+      debugPrint("✅ Startup: Nenhum lembrete recorrente precisa reagendar");
+      return;
+    }
+    
+    int reagendados = 0;
+    for (final reminder in recurringReminders) {
+      if (reminder.notificationsEnabled && !reminder.isCompleted) {
+        try {
+          // Cancelar notificações antigas
+          await NotificationService.cancelReminderNotifications(reminder.id!);
+          
+          // Reagendar com as próximas ocorrências
+          final success = await NotificationService.scheduleReminderNotifications(reminder);
+          
+          if (success) {
+            reagendados++;
+            debugPrint("✅ Reagendado: ${reminder.title} (${reminder.getRecurrenceDescription()})");
+          }
+        } catch (e) {
+          debugPrint("❌ Erro ao reagendar ${reminder.title}: $e");
+        }
+      }
+    }
+    
+    if (reagendados > 0) {
+      debugPrint("🔄 STARTUP SEGURO: $reagendados de ${recurringReminders.length} lembretes reagendados");
+    }
+    
+  } catch (e) {
+    debugPrint("❌ ERRO CRÍTICO no reagendamento de startup: $e");
+    // Em produção, você pode querer reportar este erro
+  }
 }
 
 class MyApp extends StatefulWidget {
@@ -37,21 +82,7 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     _themeMode = widget.initialThemeMode;
-    // ✅ Pedir permissão de notificação após o primeiro frame (opcional, pode ser na HomeScreen)
-    // WidgetsBinding.instance.addPostFrameCallback((_) {
-    //   _requestNotificationPermissionIfNeeded();
-    // });
   }
-
-  // // Função para pedir permissão (pode ser movida para HomeScreen)
-  // Future<void> _requestNotificationPermissionIfNeeded() async {
-  //   final prefs = await SharedPreferences.getInstance();
-  //   bool alreadyRequested = prefs.getBool('notification_permission_requested') ?? false;
-  //   if (!alreadyRequested) {
-  //     await NotificationService.requestPermissionsIfNeeded();
-  //     await prefs.setBool('notification_permission_requested', true);
-  //   }
-  // }
 
   Future<void> changeTheme(ThemeMode themeMode) async {
     setState(() {
@@ -141,4 +172,3 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
-

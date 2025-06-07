@@ -26,8 +26,8 @@ class Note {
   factory Note.fromMap(Map<String, dynamic> map) {
     return Note(
       id: map['id'],
-      title: map['title'],
-      content: map['content'],
+      title: map['title'] ?? '',
+      content: map['content'] ?? '',
       isPinned: (map['isPinned'] ?? 0) == 1,
       createdAt: DateTime.fromMillisecondsSinceEpoch(map['createdAt']),
     );
@@ -48,6 +48,10 @@ class Note {
       createdAt: createdAt ?? this.createdAt,
     );
   }
+
+  // Método para obter preview do conteúdo
+  String get contentPreview {
+    if (content.length <= 100) return content;
+    return '${content.substring(0, 100)}...';
+  }
 }
-
-

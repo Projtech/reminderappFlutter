@@ -2,20 +2,21 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-// import 'package:permission_handler/permission_handler.dart'; // REMOVIDO - Não usado
 import 'package:intl/intl.dart';
 import '../database/database_helper.dart';
 import '../database/category_helper.dart';
+import '../database/note_helper.dart'; // ✅ ADICIONADO: Import do note_helper
 import '../models/reminder.dart';
 import 'notification_service.dart';
+import '../models/note.dart';
 
 class BackupService {
   final DatabaseHelper _dbHelper = DatabaseHelper();
   final CategoryHelper _catHelper = CategoryHelper();
+  final NoteHelper _noteHelper = NoteHelper(); // ✅ ADICIONADO: Instância do note_helper
 
   // Função auxiliar para mostrar SnackBar
   void _showSnackBar(BuildContext context, String message, Color color) {
-    // A verificação 'mounted' já está aqui, o que é bom.
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -28,17 +29,18 @@ class BackupService {
   }
 
   Future<String?> exportBackup(BuildContext context) async {
-    // Removido o bloco de código comentado relacionado à permissão, que continha dead code.
-
     try {
+      // ✅ MODIFICADO: Coletando dados dos 3 bancos
       final reminders = await _dbHelper.getAllRemindersAsMaps();
       final categories = await _catHelper.getAllCategories();
+      final notes = await _noteHelper.getAllNotesAsMaps(); // ✅ ADICIONADO: Coletando anotações
 
       final backupData = {
         'version': 1,
         'createdAt': DateTime.now().toIso8601String(),
         'categories': categories,
         'reminders': reminders,
+        'notes': notes, // ✅ ADICIONADO: Incluindo anotações no backup
       };
 
       final jsonString = jsonEncode(backupData);
@@ -50,22 +52,18 @@ class BackupService {
       );
 
       if (outputFile == null) {
-        // Usuário cancelou ou falhou ao salvar
-        // Adicionando verificação explícita de 'mounted' antes de usar o context após await
         if (context.mounted) {
            _showSnackBar(context, 'Exportação cancelada ou falhou.', Colors.grey);
         }
         return null;
       }
 
-      // Adicionando verificação explícita de 'mounted' antes de usar o context após await
       if (context.mounted) {
          _showSnackBar(context, 'Backup exportado com sucesso!', Colors.green);
       }
       return outputFile;
 
     } catch (e) {
-      // Adicionando verificação explícita de 'mounted' antes de usar o context após await
       if (context.mounted) {
          _showSnackBar(context, 'Erro ao exportar backup: ${e.toString()}', Colors.red);
       }
@@ -75,16 +73,12 @@ class BackupService {
 
   Future<bool> importBackup(BuildContext context) async {
     try {
-      // Removido o bloco de código comentado relacionado à permissão, que continha dead code.
-
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['json'],
       );
 
       if (result == null || result.files.single.path == null) {
-        // Usuário cancelou ou não selecionou um arquivo válido
-        // Adicionando verificação explícita de 'mounted' antes de usar o context após await
         if (context.mounted) {
            _showSnackBar(context, 'Importação cancelada ou nenhum arquivo selecionado.', Colors.grey);
         }
@@ -96,50 +90,78 @@ class BackupService {
       final jsonString = await file.readAsString();
       final backupData = jsonDecode(jsonString) as Map<String, dynamic>;
 
-      if (backupData['version'] != 1 || backupData['categories'] == null || backupData['reminders'] == null) {
+      // ✅ MODIFICADO: Validação incluindo notes
+      if (backupData['version'] != 1 || 
+          backupData['categories'] == null || 
+          backupData['reminders'] == null ||
+          backupData['notes'] == null) {
         throw const FormatException('Formato de backup inválido ou não suportado.');
       }
 
       final categories = (backupData['categories'] as List).cast<Map<String, dynamic>>();
       final reminders = (backupData['reminders'] as List).cast<Map<String, dynamic>>();
+      final notes = (backupData['notes'] as List).cast<Map<String, dynamic>>(); // ✅ ADICIONADO: Extraindo anotações
 
+      // ✅ MODIFICADO: Limpando os 3 bancos
       await _catHelper.deleteAllCategoriesExceptDefault();
       await _dbHelper.deleteAllReminders();
+      await _noteHelper.deleteAllNotes(); // ✅ ADICIONADO: Limpando anotações
 
+      // Importando categorias
       for (final categoryMap in categories) {
         if (categoryMap['name']?.toLowerCase() != 'geral') {
            final name = categoryMap['name'] as String?;
            final color = categoryMap['color'] as String?;
            if (name != null && color != null) {
              await _catHelper.addCategory(name, color);
-           } else {
            }
         }
       }
 
+      // Importando lembretes
       for (final reminderMap in reminders) {
         try {
           final reminder = Reminder.fromMap(reminderMap);
-          await _dbHelper.insertReminder(reminder);
-          await NotificationService.scheduleNotification(
-            id: reminder.id!,
-            title: reminder.title,
-            description: reminder.description,
-            scheduledDate: reminder.dateTime,
-            category: reminder.category,
-          );
+          final insertedId = await _dbHelper.insertReminder(reminder);
+          
+          // Reagendar notificação se necessário
+          if (reminder.notificationsEnabled && 
+              !reminder.isCompleted && 
+              reminder.dateTime.isAfter(DateTime.now())) {
+            await NotificationService.scheduleNotification(
+              id: insertedId,
+              title: reminder.title,
+              description: reminder.description,
+              scheduledDate: reminder.dateTime,
+              category: reminder.category,
+            );
+          }
         } catch (e) {
+          // Log do erro individual sem interromper o processo
         }
       }
 
-      // Adicionando verificação explícita de 'mounted' antes de usar o context após await
+      // ✅ ADICIONADO: Importando anotações
+      for (final noteMap in notes) {
+        try {
+          // Remove o ID para que seja gerado automaticamente
+          final noteMapWithoutId = Map<String, dynamic>.from(noteMap);
+          noteMapWithoutId.remove('id');
+          
+          // Cria a anotação sem ID
+          final note = Note.fromMap(noteMapWithoutId);
+          await _noteHelper.insertNote(note);
+        } catch (e) {
+          // Log do erro individual sem interromper o processo
+        }
+      }
+
       if (context.mounted) {
          _showSnackBar(context, 'Backup importado com sucesso!', Colors.green);
       }
       return true;
 
     } catch (e) {
-      // Adicionando verificação explícita de 'mounted' antes de usar o context após await
       if (context.mounted) {
          _showSnackBar(context, 'Erro ao importar backup: ${e.toString()}', Colors.red);
       }
@@ -147,4 +169,3 @@ class BackupService {
     }
   }
 }
-

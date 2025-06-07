@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import '../database/note_helper.dart';
 import '../models/note.dart';
 import 'package:intl/intl.dart';
-import 'add_note_screen.dart'; // Importar a tela de adicionar anotação
-import '../main.dart'; // Importar o main para acessar a função de troca de tema
+import 'add_note_screen.dart';
+import '../main.dart';
+import '../services/backup_service.dart'; // ✅ ADICIONADO: Import do backup service
 
 class MyNotesScreen extends StatefulWidget {
   const MyNotesScreen({super.key});
@@ -15,6 +16,7 @@ class MyNotesScreen extends StatefulWidget {
 class _MyNotesScreenState extends State<MyNotesScreen> {
   final NoteHelper _noteHelper = NoteHelper();
   final TextEditingController _searchController = TextEditingController();
+  final BackupService _backupService = BackupService(); // ✅ ADICIONADO: Instância do backup service
   List<Note> _notes = [];
   List<Note> _filteredNotes = [];
   bool _isLoading = true;
@@ -40,9 +42,11 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
   Future<void> _loadNotes() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
+    
     try {
       final notes = await _noteHelper.getAllNotes();
       if (!mounted) return;
+      
       setState(() {
         _notes = notes;
         _filterNotes();
@@ -51,46 +55,80 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      // Handle error
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao carregar anotações: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
   void _filterNotes() {
     setState(() {
       _filteredNotes = _notes.where((note) {
-        final matchesSearch = _searchController.text.isEmpty ||
-            note.title.toLowerCase().contains(_searchController.text.toLowerCase());
-        return matchesSearch;
+        final searchTerm = _searchController.text.toLowerCase();
+        return searchTerm.isEmpty ||
+            note.title.toLowerCase().contains(searchTerm) ||
+            note.content.toLowerCase().contains(searchTerm);
       }).toList();
+
+      // Ordenar: fixadas primeiro, depois por data
+      _filteredNotes.sort((a, b) {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        return b.createdAt.compareTo(a.createdAt);
+      });
     });
   }
 
-  Future<void> _addNote() async {
-    // This will be replaced by a proper add note screen later
-    final newNote = Note(
-      title: 'Nova Anotação ${DateTime.now().second}',
-      content: 'Conteúdo da nova anotação.',
-      createdAt: DateTime.now(),
-    );
-    await _noteHelper.insertNote(newNote);
-    _loadNotes();
-  }
-
   Future<void> _deleteNote(Note note) async {
-    await _noteHelper.deleteNote(note.id!); // Assuming id is not null for existing notes
-    _loadNotes();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Anotação \'${note.title}\' excluída.')),
-    );
+    try {
+      await _noteHelper.deleteNote(note.id!);
+      await _loadNotes();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Anotação \'${note.title}\' excluída'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao excluir anotação: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _togglePinNote(Note note) async {
-    final updatedNote = note.copyWith(isPinned: !note.isPinned);
-    await _noteHelper.updateNote(updatedNote);
-    _loadNotes();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Anotação \'${note.title}\' ${updatedNote.isPinned ? 'fixada' : 'desafixada'}.')),
-    );
+    try {
+      final updatedNote = note.copyWith(isPinned: !note.isPinned);
+      await _noteHelper.updateNote(updatedNote);
+      await _loadNotes();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Anotação \'${note.title}\' ${updatedNote.isPinned ? 'fixada' : 'desafixada'}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao ${note.isPinned ? 'desafixar' : 'fixar'} anotação: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<bool> _showDeleteConfirmation(Note note) async {
@@ -106,11 +144,48 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Excluir'),
           ),
         ],
       ),
     ) ?? false;
+  }
+
+  // ✅ ADICIONADO: Função para exportar backup
+  Future<void> _exportBackup() async {
+    try {
+      await _backupService.exportBackup(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro inesperado: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // ✅ ADICIONADO: Função para importar backup
+  Future<void> _importBackup() async {
+    try {
+      final success = await _backupService.importBackup(context);
+      if (success && mounted) {
+        // Recarrega as anotações após importar backup
+        await _loadNotes();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro inesperado: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -135,7 +210,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
                 autofocus: true,
                 style: TextStyle(color: isDark ? Colors.white : Colors.black),
                 decoration: InputDecoration(
-                  hintText: 'Pesquisar anotações...', 
+                  hintText: 'Pesquisar anotações...',
                   hintStyle: TextStyle(
                     color: isDark ? Colors.grey[600] : Colors.grey[500],
                   ),
@@ -160,24 +235,27 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
           ),
         ],
       ),
-      drawer: _buildDrawer(),
-      body: Column(
-        children: [
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _filteredNotes.isEmpty
-                    ? _buildEmptyState()
-                    : ListView.builder(
-                        padding: const EdgeInsets.only(bottom: 80),
-                        itemCount: _filteredNotes.length,
-                        itemBuilder: (context, index) {
-                          final note = _filteredNotes[index];
-                          return _buildNoteItem(note);
-                        },
-                      ),
-          ),
-        ],
+      drawer: _buildDrawer(context),
+      body: RefreshIndicator(
+        onRefresh: _loadNotes,
+        child: Column(
+          children: [
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _filteredNotes.isEmpty
+                      ? _buildEmptyState()
+                      : ListView.builder(
+                          padding: const EdgeInsets.only(bottom: 80),
+                          itemCount: _filteredNotes.length,
+                          itemBuilder: (context, index) {
+                            final note = _filteredNotes[index];
+                            return _buildNoteItem(note);
+                          },
+                        ),
+            ),
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
@@ -200,6 +278,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
   Widget _buildEmptyState() {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -234,7 +313,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
 
     return Dismissible(
       key: Key(note.id.toString()),
-      direction: DismissDirection.endToStart, // Only allow swipe to delete
+      direction: DismissDirection.endToStart,
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
@@ -246,7 +325,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
         child: const Icon(Icons.delete, color: Colors.white),
       ),
       confirmDismiss: (direction) async {
-        if (direction == DismissDirection.endToStart) { // Swipe da direita para esquerda (excluir)
+        if (direction == DismissDirection.endToStart) {
           return await _showDeleteConfirmation(note);
         }
         return false;
@@ -263,7 +342,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: note.isPinned
-                ? Colors.amber.withOpacity(0.5) // Cor para anotação fixada
+                ? Colors.amber.withOpacity(0.5)
                 : Colors.transparent,
             width: 1,
           ),
@@ -306,19 +385,17 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
           ),
           trailing: IconButton(
             icon: Icon(note.isPinned ? Icons.push_pin : Icons.push_pin_outlined),
-            color: note.isPinned ? (isDark ? Colors.amber[300] : Colors.amber[700]) : (isDark ? Colors.grey[600] : Colors.grey[400]),
+            color: note.isPinned 
+                ? (isDark ? Colors.amber[300] : Colors.amber[700]) 
+                : (isDark ? Colors.grey[600] : Colors.grey[400]),
             onPressed: () => _togglePinNote(note),
           ),
         ),
       ),
     );
   }
-}
 
-
-
-
-  Widget _buildDrawer() {
+  Widget _buildDrawer(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Drawer(
       child: ListView(
@@ -354,10 +431,11 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
           
           const Divider(),
           
+          // ✅ SEÇÃO DE BACKUP
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
-              'SOBRE',
+              'BACKUP',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
@@ -367,25 +445,20 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
           ),
           
           ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: const Text('Sobre o App'),
+            leading: const Icon(Icons.file_download),
+            title: const Text("Importar Backup"),
             onTap: () {
               Navigator.pop(context);
-              showAboutDialog(
-                context: context,
-                applicationName: 'Minhas Anotações',
-                applicationVersion: '1.0.0',
-                applicationLegalese: '© 2024 ProjTech',
-                children: <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.only(top: 15),
-                    child: Text(
-                      'Este aplicativo permite que você gerencie suas anotações de forma simples e eficiente.',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ),
-                ],
-              );
+              _importBackup(); // ✅ CONECTADO: Chama função de importar
+            },
+          ),
+          
+          ListTile(
+            leading: const Icon(Icons.file_upload),
+            title: const Text("Exportar Backup"),
+            onTap: () {
+              Navigator.pop(context);
+              _exportBackup(); // ✅ CONECTADO: Chama função de exportar
             },
           ),
           
@@ -394,5 +467,4 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
       ),
     );
   }
-
-
+}
