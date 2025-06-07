@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart'; // Importar Permission Handler
 import 'package:shared_preferences/shared_preferences.dart';
 import '../screens/reminders_list.dart';
-import 'add_reminder.dart';
+import 'my_notes_screen.dart'; // Importar a nova tela de anotações
 import '../services/notification_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -181,28 +181,29 @@ class _HomeScreenState extends State<HomeScreen> {
               SizedBox(
                 width: double.infinity,
                 height: 56,
-                child: OutlinedButton.icon(
+                child: ElevatedButton.icon(
                   onPressed: () {
-                     Navigator.push(
+                    Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const AddReminderScreen(),
+                        builder: (context) => const MyNotesScreen(),
                       ),
                     );
                   },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: colorScheme.primary,
-                    side: BorderSide(color: colorScheme.primary, width: 1.5),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: colorScheme.primary,
+                    foregroundColor: colorScheme.onPrimary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
-                     padding: const EdgeInsets.symmetric(vertical: 14),
+                    elevation: 2,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  icon: const Icon(Icons.add_circle_outline_rounded, size: 24),
+                  icon: const Icon(Icons.notes_rounded, size: 24),
                   label: Text(
-                    'Criar Novo Lembrete',
-                     style: theme.textTheme.labelLarge?.copyWith(
-                       color: colorScheme.primary,
+                    'Ver Minhas Anotações',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                       color: colorScheme.onPrimary,
                        fontWeight: FontWeight.bold
                     ),
                   ),
