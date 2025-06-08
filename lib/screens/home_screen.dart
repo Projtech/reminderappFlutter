@@ -47,6 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         // Mostrar feedback ao usuário
         if (notificationGranted) {
+          // ignore: use_build_context_synchronously
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Permissão de notificações concedida!'), backgroundColor: Colors.green),
           );
@@ -57,6 +58,7 @@ class _HomeScreenState extends State<HomeScreen> {
              // );
           }
         } else {
+          // ignore: use_build_context_synchronously
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Permissão de notificações negada. Ative nas configurações para receber lembretes.'), backgroundColor: Colors.orange),
           );
