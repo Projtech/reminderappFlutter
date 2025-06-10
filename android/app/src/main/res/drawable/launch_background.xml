@@ -1,12 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Modify this file to customize your launch splash screen -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Background branco -->
     <item android:drawable="@android:color/white" />
 
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
+    <!-- Ícone do app centralizado -->
+    <item>
         <bitmap
             android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+            android:src="@mipmap/ic_launcher" />
+    </item>
+
+    <!-- Loading circular simples -->
+    <item android:gravity="center" android:top="120dp">
+        <shape android:shape="ring"
+               android:innerRadius="12dp"
+               android:thickness="3dp"
+               android:useLevel="false">
+            <solid android:color="#6366F1" />
+        </shape>
+    </item>
 </layer-list>

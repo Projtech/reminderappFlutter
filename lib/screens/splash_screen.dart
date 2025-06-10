@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../screens/reminders_list.dart';
 import 'my_notes_screen.dart';
 import '../services/notification_service.dart';
-import '../database/database_helper.dart';
+import '../database/database_helper.dart'; // Só este import adicional
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,27 +19,20 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // 🚀 EXECUTAR IMEDIATAMENTE EM BACKGROUND THREAD
-    _initializeAppInBackground();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeAppInBackground();
+    });
   }
 
   Future<void> _initializeAppInBackground() async {
     try {
-      debugPrint('HomeScreen: Starting TRUE background initialization...');
+      debugPrint('HomeScreen: Starting background initialization...');
       
-      // 🚀 SOLUÇÃO: Usar Future.delayed para garantir que interface renderize primeiro
-      await Future.delayed(const Duration(milliseconds: 100));
-      
-      // 🚀 Executar operações em chunks pequenos para não bloquear UI
       await NotificationService.initialize();
-      await Future.delayed(const Duration(milliseconds: 10)); // Breathe
-      
       await _recheckRecurringRemindersOnStartup();
-      await Future.delayed(const Duration(milliseconds: 10)); // Breathe
-      
       await _requestNotificationPermissionIfNeeded();
       
-      debugPrint('HomeScreen: TRUE background initialization completed');
+      debugPrint('HomeScreen: Background initialization completed');
     } catch (e) {
       debugPrint('HomeScreen: Error in background initialization: $e');
     } finally {
@@ -72,9 +65,6 @@ class _HomeScreenState extends State<HomeScreen> {
               reagendados++;
               debugPrint("✅ Reagendado: ${reminder.title}");
             }
-            
-            // 🚀 BREATHE: Dar chance para UI atualizar
-            await Future.delayed(const Duration(milliseconds: 5));
           } catch (e) {
             debugPrint("❌ Erro ao reagendar ${reminder.title}: $e");
           }
@@ -275,34 +265,32 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-
             if (_isInitializing)
               Positioned(
-                top: 16,
-                right: 16,
+                top: 20,
+                right: 20,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer.withAlpha(180),
-                    borderRadius: BorderRadius.circular(12),
+                    color: colorScheme.primaryContainer.withAlpha(200),
+                    borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       SizedBox(
-                        width: 12,
-                        height: 12,
+                        width: 16,
+                        height: 16,
                         child: CircularProgressIndicator(
-                          strokeWidth: 1.5,
+                          strokeWidth: 2,
                           color: colorScheme.primary,
                         ),
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 8),
                       Text(
-                        'Iniciando...',
+                        'Inicializando...',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: colorScheme.onPrimaryContainer,
-                          fontSize: 11,
                         ),
                       ),
                     ],

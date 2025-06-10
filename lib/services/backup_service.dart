@@ -30,17 +30,17 @@ class BackupService {
 
   Future<String?> exportBackup(BuildContext context) async {
     try {
-      // ✅ MODIFICADO: Coletando dados dos 3 bancos
+      // MODIFICADO: Coletando dados dos 3 bancos
       final reminders = await _dbHelper.getAllRemindersAsMaps();
       final categories = await _catHelper.getAllCategories();
-      final notes = await _noteHelper.getAllNotesAsMaps(); // ✅ ADICIONADO: Coletando anotações
+      final notes = await _noteHelper.getAllNotesAsMaps(); //  ADICIONADO: Coletando anotações
 
       final backupData = {
         'version': 1,
         'createdAt': DateTime.now().toIso8601String(),
         'categories': categories,
         'reminders': reminders,
-        'notes': notes, // ✅ ADICIONADO: Incluindo anotações no backup
+        'notes': notes, //  ADICIONADO: Incluindo anotações no backup
       };
 
       final jsonString = jsonEncode(backupData);
@@ -90,7 +90,7 @@ class BackupService {
       final jsonString = await file.readAsString();
       final backupData = jsonDecode(jsonString) as Map<String, dynamic>;
 
-      // ✅ MODIFICADO: Validação incluindo notes
+      // MODIFICADO: Validação incluindo notes
       if (backupData['version'] != 1 || 
           backupData['categories'] == null || 
           backupData['reminders'] == null ||
@@ -102,7 +102,7 @@ class BackupService {
       final reminders = (backupData['reminders'] as List).cast<Map<String, dynamic>>();
       final notes = (backupData['notes'] as List).cast<Map<String, dynamic>>(); // ✅ ADICIONADO: Extraindo anotações
 
-      // ✅ MODIFICADO: Limpando os 3 bancos
+      //  MODIFICADO: Limpando os 3 bancos
       await _catHelper.deleteAllCategoriesExceptDefault();
       await _dbHelper.deleteAllReminders();
       await _noteHelper.deleteAllNotes(); // ✅ ADICIONADO: Limpando anotações
@@ -141,7 +141,7 @@ class BackupService {
         }
       }
 
-      // ✅ ADICIONADO: Importando anotações
+      //  ADICIONADO: Importando anotações
       for (final noteMap in notes) {
         try {
           // Remove o ID para que seja gerado automaticamente

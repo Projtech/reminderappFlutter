@@ -152,38 +152,102 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
     ) ?? false;
   }
 
-  // ✅ ADICIONADO: Função para exportar backup
+  // ✅ MODIFICAÇÃO: Função para exportar backup com aviso
   Future<void> _exportBackup() async {
-    try {
-      await _backupService.exportBackup(context);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro inesperado: $e'),
-            backgroundColor: Colors.red,
+    // Mostrar diálogo explicativo antes de exportar
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Exportar Backup Completo'),
+        content: const Text(
+          'Esta ação irá exportar TODOS os seus dados:\n\n'
+          '• Todos os lembretes\n'
+          '• Todas as anotações\n'
+          '• Todas as categorias\n\n'
+          'Deseja continuar?'
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
           ),
-        );
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Exportar Tudo'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await _backupService.exportBackup(context);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erro inesperado: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
 
-  // ✅ ADICIONADO: Função para importar backup
+  // ✅ MODIFICAÇÃO: Função para importar backup com aviso
   Future<void> _importBackup() async {
-    try {
-      final success = await _backupService.importBackup(context);
-      if (success && mounted) {
-        // Recarrega as anotações após importar backup
-        await _loadNotes();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro inesperado: $e'),
-            backgroundColor: Colors.red,
+    // Mostrar diálogo explicativo antes de importar
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Importar Backup Completo'),
+        content: const Text(
+          'Esta ação irá importar TODOS os dados do backup:\n\n'
+          '• Todos os lembretes\n'
+          '• Todas as anotações\n'
+          '• Todas as categorias\n\n'
+          '⚠️ ATENÇÃO: Dados existentes podem ser substituídos!\n\n'
+          'Deseja continuar?'
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
           ),
-        );
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+            ),
+            child: const Text('Importar Tudo'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        final success = await _backupService.importBackup(context);
+        if (success && mounted) {
+          // Recarrega as anotações após importar backup
+          await _loadNotes();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erro inesperado: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }

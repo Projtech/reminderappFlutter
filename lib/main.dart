@@ -2,66 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
-import 'services/notification_service.dart';
-import 'database/database_helper.dart'; // ✅ ADICIONAR
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('pt_BR', null);
 
-  // Inicializa o serviço de notificação SEM pedir permissão ainda
-  await NotificationService.initialize();
-
-  // ✅ VERIFICAÇÃO CRÍTICA DE SEGURANÇA - SEMPRE EXECUTA
-  await _recheckRecurringRemindersOnStartup();
-
-  // Carrega tema
+  // 🚀 OTIMIZAÇÃO: Só carregar tema (rápido) antes do runApp()
   final prefs = await SharedPreferences.getInstance();
   final String? themeModeString = prefs.getString('theme_mode');
   ThemeMode initialThemeMode = (themeModeString == 'dark') ? ThemeMode.dark : ThemeMode.light;
 
+  // 🚀 EXECUTAR APP IMEDIATAMENTE - Operações pesadas movidas para HomeScreen
   runApp(MyApp(initialThemeMode: initialThemeMode));
-}
-
-// ✅ FUNÇÃO DE SEGURANÇA CRÍTICA
-Future<void> _recheckRecurringRemindersOnStartup() async {
-  try {
-    final databaseHelper = DatabaseHelper();
-    final recurringReminders = await databaseHelper.getRecurringRemindersNeedingReschedule();
-    
-    if (recurringReminders.isEmpty) {
-      debugPrint("✅ Startup: Nenhum lembrete recorrente precisa reagendar");
-      return;
-    }
-    
-    int reagendados = 0;
-    for (final reminder in recurringReminders) {
-      if (reminder.notificationsEnabled && !reminder.isCompleted) {
-        try {
-          // Cancelar notificações antigas
-          await NotificationService.cancelReminderNotifications(reminder.id!);
-          
-          // Reagendar com as próximas ocorrências
-          final success = await NotificationService.scheduleReminderNotifications(reminder);
-          
-          if (success) {
-            reagendados++;
-            debugPrint("✅ Reagendado: ${reminder.title} (${reminder.getRecurrenceDescription()})");
-          }
-        } catch (e) {
-          debugPrint("❌ Erro ao reagendar ${reminder.title}: $e");
-        }
-      }
-    }
-    
-    if (reagendados > 0) {
-      debugPrint("🔄 STARTUP SEGURO: $reagendados de ${recurringReminders.length} lembretes reagendados");
-    }
-    
-  } catch (e) {
-    debugPrint("❌ ERRO CRÍTICO no reagendamento de startup: $e");
-    // Em produção, você pode querer reportar este erro
-  }
 }
 
 class MyApp extends StatefulWidget {
@@ -119,10 +71,10 @@ class _MyAppState extends State<MyApp> {
         brightness: Brightness.dark,
         primary: Colors.blue[300],
         secondary: Colors.tealAccent[100],
-        surface: const Color(0xFF1E1E1E), // Usar surface
+        surface: const Color(0xFF1E1E1E),
         onPrimary: Colors.black,
         onSecondary: Colors.black,
-        onSurface: Colors.white, // Usar onSurface
+        onSurface: Colors.white,
       ),
       cardTheme: CardThemeData(
         elevation: 1,
@@ -146,7 +98,7 @@ class _MyAppState extends State<MyApp> {
         }),
         trackColor: WidgetStateProperty.resolveWith<Color?>((Set<WidgetState> states) {
           if (states.contains(WidgetState.selected)) {
-            return Colors.blue[300]?.withAlpha(128); // Corrigido de withOpacity(0.5)
+            return Colors.blue[300]?.withAlpha(128);
           }
           return null;
         }),
@@ -167,7 +119,6 @@ class _MyAppState extends State<MyApp> {
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: _themeMode,
-      // ✅ A HomeScreen agora será responsável por pedir a permissão
       home: const HomeScreen(),
     );
   }

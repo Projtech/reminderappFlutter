@@ -3,7 +3,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:flutter_timezone/flutter_timezone.dart';
-import '../models/reminder.dart'; // ✅ NOVO: Import do modelo
+import '../models/reminder.dart';
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notifications =
@@ -12,7 +12,7 @@ class NotificationService {
   static const String _channelId = 'heads_up_urgent_channel';
   static const String _channelName = 'Heads-Up Urgentes';
   static const String _channelDescription = 'Notificações que aparecem na tela com som.';
-  static const int _maxScheduledNotifications = 15; // ✅ LIMITE DE AGENDAMENTOS
+  static const int _maxScheduledNotifications = 15; // LIMITE DE AGENDAMENTOS
 
   @pragma('vm:entry-point')
   static Future<void> initialize() async {
@@ -105,7 +105,7 @@ class NotificationService {
     // Pode implementar navegação específica aqui
   }
 
-  // ✅ NOVO: AGENDAR MÚLTIPLAS NOTIFICAÇÕES PARA UM LEMBRETE
+  // NOVO: AGENDAR MÚLTIPLAS NOTIFICAÇÕES PARA UM LEMBRETE
   @pragma('vm:entry-point')
   static Future<bool> scheduleReminderNotifications(Reminder reminder) async {
     if (!_initialized) return false;
@@ -116,7 +116,7 @@ class NotificationService {
     final now = DateTime.now();
     
     if (reminder.isRecurring && reminder.recurringType != null && reminder.recurringType != 'none') {
-      // ✅ AGENDAR MÚLTIPLAS OCORRÊNCIAS
+      //  AGENDAR MÚLTIPLAS OCORRÊNCIAS
       final occurrences = reminder.getNextOccurrences(_maxScheduledNotifications);
       int scheduledCount = 0;
       
@@ -137,7 +137,7 @@ class NotificationService {
       
       return scheduledCount > 0;
     } else {
-      // ✅ AGENDAMENTO ÚNICO
+      //  AGENDAMENTO ÚNICO
       if (reminder.dateTime.isAfter(now.subtract(const Duration(seconds: 5)))) {
         return await _scheduleIndividualNotification(
           id: reminder.id!,
@@ -152,14 +152,14 @@ class NotificationService {
     return false;
   }
 
-  // ✅ GERAR IDs ÚNICOS PARA REPETIÇÕES (evita conflitos)
+  //  GERAR IDs ÚNICOS PARA REPETIÇÕES (evita conflitos)
   static int _generateRecurrenceId(int reminderId, int occurrenceIndex) {
     // Combina o ID do lembrete com o índice da ocorrência
     // Ex: reminder ID 123, occurrence 5 = 1235 (limitado a 999 ocorrências)
     return (reminderId * 1000) + (occurrenceIndex % 1000);
   }
 
-  // ✅ CANCELAR TODAS AS NOTIFICAÇÕES DE UM LEMBRETE
+  // CANCELAR TODAS AS NOTIFICAÇÕES DE UM LEMBRETE
   @pragma('vm:entry-point')
   static Future<void> cancelReminderNotifications(int reminderId) async {
     if (!_initialized) return;
@@ -178,7 +178,7 @@ class NotificationService {
     }
   }
 
-  // ✅ MÉTODO INTERNO PARA AGENDAMENTO INDIVIDUAL
+  // MÉTODO INTERNO PARA AGENDAMENTO INDIVIDUAL
   @pragma('vm:entry-point')
   static Future<bool> _scheduleIndividualNotification({
     required int id,
@@ -215,7 +215,7 @@ class NotificationService {
         category: AndroidNotificationCategory.alarm,
         autoCancel: true,
         ongoing: false,
-        when: DateTime.now().millisecondsSinceEpoch,
+        when: null,
         showWhen: true,
         ticker: title.trim(),
       );
@@ -239,7 +239,7 @@ class NotificationService {
     }
   }
 
-  // ✅ COMPATIBILIDADE: Manter método antigo
+  // COMPATIBILIDADE: Manter método antigo
   @pragma('vm:entry-point')
   static Future<bool> scheduleNotification({
     required int id,
@@ -257,7 +257,7 @@ class NotificationService {
     );
   }
 
-  // ✅ COMPATIBILIDADE: Manter método antigo
+  // COMPATIBILIDADE: Manter método antigo
   @pragma('vm:entry-point')
   static Future<void> cancelNotification(int id) async {
     await cancelReminderNotifications(id);

@@ -4,13 +4,10 @@ import '../database/database_helper.dart';
 import '../models/reminder.dart';
 import 'add_reminder.dart';
 import '../services/notification_service.dart';
-import '../services/backup_service.dart'; // ✅ ADICIONADO: Import do backup service
+import '../services/backup_service.dart';
 import 'package:intl/intl.dart';
-// Importa a tela de gerenciamento de categorias
 import 'manage_categories_screen.dart';
-// Importa o helper de categorias para buscar cores
 import '../database/category_helper.dart';
-// Importa o main para acessar a função de troca de tema
 import '../main.dart';
 
 class RemindersListScreen extends StatefulWidget {
@@ -33,7 +30,6 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
   List<String> _normalizedCategories = []; // Lista de nomes normalizados
   Map<String, Color> _categoryColorMap = {}; // Chave: nome normalizado
 
-  // Getter to calculate the date exactly 7 days from now (start of that day)
   DateTime get weekFromNow {
     final now = DateTime.now();
     final targetDate = now.add(const Duration(days: 7));
@@ -146,38 +142,102 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
     });
   }
 
-  // ✅ ADICIONADO: Função para exportar backup
+  // MODIFICAÇÃO: Função para exportar backup com aviso
   Future<void> _exportBackup() async {
-    try {
-      await _backupService.exportBackup(context);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro inesperado: $e'),
-            backgroundColor: Colors.red,
+    // Mostrar diálogo explicativo antes de exportar
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Exportar Backup'),
+        content: const Text(
+          'Esta ação irá exportar TODOS os seus dados:\n\n'
+          '• Todos os lembretes\n'
+          '• Todas as anotações\n'
+          '• Todas as categorias\n\n'
+          'Deseja continuar?'
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
           ),
-        );
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Exportar Tudo'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await _backupService.exportBackup(context);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erro inesperado: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
 
-  // ✅ ADICIONADO: Função para importar backup
+  //MODIFICAÇÃO: Função para importar backup com aviso
   Future<void> _importBackup() async {
-    try {
-      final success = await _backupService.importBackup(context);
-      if (success && mounted) {
-        // Recarrega os lembretes após importar backup
-        await _loadReminders();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro inesperado: $e'),
-            backgroundColor: Colors.red,
+    // Mostrar diálogo explicativo antes de importar
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Importar Backup'),
+        content: const Text(
+          'Esta ação irá importar TODOS os dados do backup:\n\n'
+          '• Todos os lembretes\n'
+          '• Todas as anotações\n'
+          '• Todas as categorias\n\n'
+          '⚠️ ATENÇÃO: Dados existentes podem ser substituídos!\n\n'
+          'Deseja continuar?'
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
           ),
-        );
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+            ),
+            child: const Text('Importar Tudo'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        final success = await _backupService.importBackup(context);
+        if (success && mounted) {
+          // Recarrega os lembretes após importar backup
+          await _loadReminders();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erro inesperado: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
@@ -315,7 +375,7 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
             ),
           ),
           
-          // ✅ SEÇÃO DE CONFIGURAÇÕES BÁSICAS
+          //SEÇÃO DE CONFIGURAÇÕES BÁSICAS
           ListTile(
             leading: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
             title: Text(isDark ? 'Modo Claro' : 'Modo Escuro'),
@@ -347,7 +407,7 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
           
           const Divider(),
           
-          // ✅ SEÇÃO DE BACKUP
+          //SEÇÃO DE BACKUP
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
@@ -365,7 +425,7 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
             title: const Text("Importar Backup"),
             onTap: () {
               Navigator.pop(context);
-              _importBackup(); // ✅ CONECTADO: Chama função de importar
+              _importBackup(); 
             },
           ),
           
@@ -374,13 +434,13 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
             title: const Text("Exportar Backup"),
             onTap: () {
               Navigator.pop(context);
-              _exportBackup(); // ✅ CONECTADO: Chama função de exportar
+              _exportBackup(); 
             },
           ),
           
           const Divider(),
           
-          // ✅ SEÇÃO DE NOTIFICAÇÕES
+          //SEÇÃO DE NOTIFICAÇÕES
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
@@ -417,9 +477,6 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
       ),
     );
   }
-
-  // [Resto do código permanece igual - _buildReminderItem, _buildEmptyState, _showReminderDetails, etc...]
-  // Mantenho o resto das funções exatamente como estava no arquivo original
 
   Widget _buildReminderItem(Reminder reminder) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
