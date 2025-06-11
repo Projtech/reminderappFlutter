@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart'; // ✅ NOVO IMPORT
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
@@ -116,6 +117,18 @@ class _MyAppState extends State<MyApp> {
       title: 'Lembretes',
       navigatorKey: MyApp.navigatorKey,
       debugShowCheckedModeBanner: false,
+      
+      // ✅ CONFIGURAÇÃO DE LOCALIZAÇÃO EM PORTUGUÊS BRASILEIRO
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('pt', 'BR'), // Português brasileiro
+      ],
+      locale: const Locale('pt', 'BR'), // ✅ FORÇA PORTUGUÊS BRASILEIRO
+      
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: _themeMode,

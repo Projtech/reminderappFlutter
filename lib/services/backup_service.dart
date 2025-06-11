@@ -7,7 +7,7 @@ import '../database/database_helper.dart';
 import '../database/category_helper.dart';
 import '../database/note_helper.dart'; // ✅ ADICIONADO: Import do note_helper
 import '../models/reminder.dart';
-import 'notification_service.dart';
+import '../services/notification_service.dart';
 import '../models/note.dart';
 
 class BackupService {
@@ -30,24 +30,24 @@ class BackupService {
 
   Future<String?> exportBackup(BuildContext context) async {
     try {
-      // MODIFICADO: Coletando dados dos 3 bancos
+      // ✅ ATUALIZADO: Coletando dados dos 3 bancos (incluindo createdAt nos reminders)
       final reminders = await _dbHelper.getAllRemindersAsMaps();
       final categories = await _catHelper.getAllCategories();
-      final notes = await _noteHelper.getAllNotesAsMaps(); //  ADICIONADO: Coletando anotações
+      final notes = await _noteHelper.getAllNotesAsMaps();
 
       final backupData = {
-        'version': 1,
+        'version': 2, // ✅ VERSÃO 2 para incluir createdAt
         'createdAt': DateTime.now().toIso8601String(),
         'categories': categories,
-        'reminders': reminders,
-        'notes': notes, //  ADICIONADO: Incluindo anotações no backup
+        'reminders': reminders, // ✅ Agora inclui createdAt automaticamente
+        'notes': notes,
       };
 
       final jsonString = jsonEncode(backupData);
 
       String? outputFile = await FilePicker.platform.saveFile(
         dialogTitle: 'Salvar Backup Como',
-        fileName: 'lembretes_backup_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.json',
+        fileName: 'lembretes_${DateFormat('dd-MM-yyyy').format(DateTime.now())}.json',
         bytes: utf8.encode(jsonString),
       );
 
@@ -90,8 +90,9 @@ class BackupService {
       final jsonString = await file.readAsString();
       final backupData = jsonDecode(jsonString) as Map<String, dynamic>;
 
-      // MODIFICADO: Validação incluindo notes
-      if (backupData['version'] != 1 || 
+      // ✅ ATUALIZADO: Suporte para versões 1 e 2 do backup
+      final version = backupData['version'] ?? 1;
+      if (version < 1 || version > 2 || 
           backupData['categories'] == null || 
           backupData['reminders'] == null ||
           backupData['notes'] == null) {
@@ -100,12 +101,12 @@ class BackupService {
 
       final categories = (backupData['categories'] as List).cast<Map<String, dynamic>>();
       final reminders = (backupData['reminders'] as List).cast<Map<String, dynamic>>();
-      final notes = (backupData['notes'] as List).cast<Map<String, dynamic>>(); // ✅ ADICIONADO: Extraindo anotações
+      final notes = (backupData['notes'] as List).cast<Map<String, dynamic>>();
 
-      //  MODIFICADO: Limpando os 3 bancos
+      // Limpando os 3 bancos
       await _catHelper.deleteAllCategoriesExceptDefault();
       await _dbHelper.deleteAllReminders();
-      await _noteHelper.deleteAllNotes(); // ✅ ADICIONADO: Limpando anotações
+      await _noteHelper.deleteAllNotes();
 
       // Importando categorias
       for (final categoryMap in categories) {
@@ -118,9 +119,14 @@ class BackupService {
         }
       }
 
-      // Importando lembretes
+      // ✅ ATUALIZADO: Importando lembretes (com suporte a createdAt)
       for (final reminderMap in reminders) {
         try {
+          // ✅ Para backups antigos (versão 1), adicionar createdAt se não existir
+          if (version == 1 && reminderMap['createdAt'] == null) {
+            reminderMap['createdAt'] = DateTime.now().millisecondsSinceEpoch;
+          }
+          
           final reminder = Reminder.fromMap(reminderMap);
           final insertedId = await _dbHelper.insertReminder(reminder);
           
@@ -138,10 +144,11 @@ class BackupService {
           }
         } catch (e) {
           // Log do erro individual sem interromper o processo
+          debugPrint('Erro ao importar lembrete: $e');
         }
       }
 
-      //  ADICIONADO: Importando anotações
+      // Importando anotações
       for (final noteMap in notes) {
         try {
           // Remove o ID para que seja gerado automaticamente
@@ -153,6 +160,7 @@ class BackupService {
           await _noteHelper.insertNote(note);
         } catch (e) {
           // Log do erro individual sem interromper o processo
+          debugPrint('Erro ao importar anotação: $e');
         }
       }
 

@@ -19,7 +19,7 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'reminders.db');
     return await openDatabase(
       path,
-      version: 4, // ✅ VERSÃO 4 para novo campo
+      version: 5, // ✅ VERSÃO 5 para novo campo createdAt
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -33,6 +33,7 @@ class DatabaseHelper {
         description TEXT NOT NULL,
         category TEXT NOT NULL,
         dateTime INTEGER NOT NULL,
+        createdAt INTEGER NOT NULL,
         isCompleted INTEGER NOT NULL DEFAULT 0,
         isRecurring INTEGER NOT NULL DEFAULT 0,
         recurringType TEXT,
@@ -51,8 +52,13 @@ class DatabaseHelper {
       await db.execute('ALTER TABLE reminders ADD COLUMN notificationsEnabled INTEGER NOT NULL DEFAULT 1');
     }
     if (oldVersion < 4) {
-      // ✅ NOVA MIGRAÇÃO: Adicionar campo de intervalo
+      // ✅ MIGRAÇÃO V4: Adicionar campo de intervalo
       await db.execute('ALTER TABLE reminders ADD COLUMN recurrenceInterval INTEGER NOT NULL DEFAULT 1');
+    }
+    if (oldVersion < 5) {
+      // ✅ MIGRAÇÃO V5: Adicionar campo createdAt
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await db.execute('ALTER TABLE reminders ADD COLUMN createdAt INTEGER NOT NULL DEFAULT $now');
     }
   }
 

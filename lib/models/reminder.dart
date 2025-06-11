@@ -4,6 +4,7 @@ class Reminder {
   String description;
   String category;
   DateTime dateTime;
+  DateTime createdAt; // ✅ NOVO CAMPO
   bool isCompleted;
   bool isRecurring;
   String? recurringType; // none, daily, weekly, monthly, custom_daily, custom_weekly, custom_monthly
@@ -16,12 +17,13 @@ class Reminder {
     required this.description,
     required this.category,
     required this.dateTime,
+    DateTime? createdAt, // ✅ NOVO PARÂMETRO
     this.isCompleted = false,
     this.isRecurring = false,
     this.recurringType,
     this.recurrenceInterval = 1, // ✅ NOVO: padrão 1
     this.notificationsEnabled = true,
-  });
+  }) : createdAt = createdAt ?? DateTime.now(); // ✅ VALOR PADRÃO
 
   Map<String, dynamic> toMap() {
     return {
@@ -30,6 +32,7 @@ class Reminder {
       'description': description,
       'category': category,
       'dateTime': dateTime.millisecondsSinceEpoch,
+      'createdAt': createdAt.millisecondsSinceEpoch, // ✅ NOVO
       'isCompleted': isCompleted ? 1 : 0,
       'isRecurring': isRecurring ? 1 : 0,
       'recurringType': recurringType,
@@ -45,6 +48,9 @@ class Reminder {
       description: map['description'],
       category: map['category'],
       dateTime: DateTime.fromMillisecondsSinceEpoch(map['dateTime']),
+      createdAt: map['createdAt'] != null 
+          ? DateTime.fromMillisecondsSinceEpoch(map['createdAt'])
+          : DateTime.now(), // ✅ NOVO COM FALLBACK
       isCompleted: map['isCompleted'] == 1,
       isRecurring: (map['isRecurring'] ?? 0) == 1,
       recurringType: map['recurringType'],
@@ -59,6 +65,7 @@ class Reminder {
     String? description,
     String? category,
     DateTime? dateTime,
+    DateTime? createdAt, // ✅ NOVO
     bool? isCompleted,
     bool? isRecurring,
     String? recurringType,
@@ -71,6 +78,7 @@ class Reminder {
       description: description ?? this.description,
       category: category ?? this.category,
       dateTime: dateTime ?? this.dateTime,
+      createdAt: createdAt ?? this.createdAt, // ✅ NOVO
       isCompleted: isCompleted ?? this.isCompleted,
       isRecurring: isRecurring ?? this.isRecurring,
       recurringType: recurringType ?? this.recurringType,
@@ -268,7 +276,7 @@ class Reminder {
       case 'custom_monthly':
         return recurrenceInterval == 1 ? 'Mensalmente' : 'A cada $recurrenceInterval meses';
       default:
-        return 'Repetição personalizada';
+        return 'Personalizado';
     }
   }
 }
