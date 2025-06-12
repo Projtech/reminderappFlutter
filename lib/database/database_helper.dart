@@ -19,7 +19,7 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'reminders.db');
     return await openDatabase(
       path,
-      version: 5, // ✅ VERSÃO 5 para novo campo createdAt
+      version: 6, // ✅ VERSÃO 6 para lixeira
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -38,7 +38,9 @@ class DatabaseHelper {
         isRecurring INTEGER NOT NULL DEFAULT 0,
         recurringType TEXT,
         recurrenceInterval INTEGER NOT NULL DEFAULT 1,
-        notificationsEnabled INTEGER NOT NULL DEFAULT 1
+        notificationsEnabled INTEGER NOT NULL DEFAULT 1,
+        deleted INTEGER NOT NULL DEFAULT 0,
+        deletedAt INTEGER
       )
     ''');
   }
@@ -52,13 +54,16 @@ class DatabaseHelper {
       await db.execute('ALTER TABLE reminders ADD COLUMN notificationsEnabled INTEGER NOT NULL DEFAULT 1');
     }
     if (oldVersion < 4) {
-      // ✅ MIGRAÇÃO V4: Adicionar campo de intervalo
       await db.execute('ALTER TABLE reminders ADD COLUMN recurrenceInterval INTEGER NOT NULL DEFAULT 1');
     }
     if (oldVersion < 5) {
-      // ✅ MIGRAÇÃO V5: Adicionar campo createdAt
       final now = DateTime.now().millisecondsSinceEpoch;
       await db.execute('ALTER TABLE reminders ADD COLUMN createdAt INTEGER NOT NULL DEFAULT $now');
+    }
+    if (oldVersion < 6) {
+      // ✅ MIGRAÇÃO V6: Adicionar campos da lixeira
+      await db.execute('ALTER TABLE reminders ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE reminders ADD COLUMN deletedAt INTEGER');
     }
   }
 
@@ -67,16 +72,34 @@ class DatabaseHelper {
     return await db.insert('reminders', reminder.toMap());
   }
 
+  // ✅ MODIFICADO: Filtrar apenas não deletados
   Future<List<Reminder>> getAllReminders() async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query('reminders',
+        where: 'deleted = 0',
         orderBy: 'dateTime ASC');
     return List.generate(maps.length, (i) => Reminder.fromMap(maps[i]));
   }
 
+  // ✅ MODIFICADO: Filtrar apenas não deletados para backup
   Future<List<Map<String, dynamic>>> getAllRemindersAsMaps() async {
     final db = await database;
-    return await db.query('reminders');
+    return await db.query('reminders', where: 'deleted = 0');
+  }
+
+  // ✅ NOVO: Obter lembretes deletados (lixeira)
+  Future<List<Reminder>> getDeletedReminders() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('reminders',
+        where: 'deleted = 1',
+        orderBy: 'deletedAt DESC');
+    return List.generate(maps.length, (i) => Reminder.fromMap(maps[i]));
+  }
+
+  // ✅ NOVO: Obter lembretes deletados como Maps (para backup)
+  Future<List<Map<String, dynamic>>> getDeletedRemindersAsMaps() async {
+    final db = await database;
+    return await db.query('reminders', where: 'deleted = 1');
   }
 
   Future<int> updateReminder(Reminder reminder) async {
@@ -89,36 +112,88 @@ class DatabaseHelper {
     );
   }
 
+  // ✅ MODIFICADO: Soft delete ao invés de DELETE físico
   Future<int> deleteReminder(int id) async {
+    final db = await database;
+    return await db.update(
+      'reminders',
+      {
+        'deleted': 1,
+        'deletedAt': DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  // ✅ NOVO: Restaurar lembrete da lixeira
+  Future<int> restoreReminder(int id) async {
+    final db = await database;
+    return await db.update(
+      'reminders',
+      {
+        'deleted': 0,
+        'deletedAt': null,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  // ✅ NOVO: Excluir permanentemente
+  Future<int> deleteReminderPermanently(int id) async {
     final db = await database;
     return await db.delete('reminders', where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<int> deleteAllReminders() async {
+  // ✅ NOVO: Limpar lixeira (excluir todos os deletados permanentemente)
+  Future<int> emptyTrash() async {
     final db = await database;
-    return await db.delete('reminders');
+    return await db.delete('reminders', where: 'deleted = 1');
   }
 
-  // ✅ REMOVIDO: método createNextOccurrence não é mais necessário
-  // O agendamento múltiplo é feito pelo NotificationService
+  // ✅ NOVO: Auto-limpeza da lixeira (itens mais antigos que X dias)
+  Future<int> cleanOldDeletedReminders(int daysOld) async {
+    final db = await database;
+    final cutoffDate = DateTime.now().subtract(Duration(days: daysOld)).millisecondsSinceEpoch;
+    return await db.delete(
+      'reminders',
+      where: 'deleted = 1 AND deletedAt < ?',
+      whereArgs: [cutoffDate],
+    );
+  }
 
+  // ✅ MODIFICADO: Deletar todos não deletados (para backup)
+  Future<int> deleteAllReminders() async {
+    final db = await database;
+    return await db.update(
+      'reminders',
+      {
+        'deleted': 1,
+        'deletedAt': DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'deleted = 0',
+    );
+  }
+
+  // ✅ MODIFICADO: Contar apenas não deletados
   Future<int> getReminderCountByCategory(String categoryName) async {
     final db = await database;
     final result = await db.rawQuery(
-      'SELECT COUNT(*) FROM reminders WHERE category = ?',
+      'SELECT COUNT(*) FROM reminders WHERE category = ? AND deleted = 0',
       [categoryName],
     );
     return Sqflite.firstIntValue(result) ?? 0;
   }
 
-  // ✅ NOVO: Buscar lembretes recorrentes que precisam reagendar
+  // ✅ MODIFICADO: Filtrar apenas não deletados
   Future<List<Reminder>> getRecurringRemindersNeedingReschedule() async {
     final db = await database;
     final now = DateTime.now().millisecondsSinceEpoch;
     
     final List<Map<String, dynamic>> maps = await db.query(
       'reminders',
-      where: 'isRecurring = 1 AND isCompleted = 0 AND notificationsEnabled = 1 AND dateTime < ?',
+      where: 'isRecurring = 1 AND isCompleted = 0 AND notificationsEnabled = 1 AND dateTime < ? AND deleted = 0',
       whereArgs: [now],
     );
     

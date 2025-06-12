@@ -4,6 +4,8 @@ class Note {
   String content;
   bool isPinned;
   DateTime createdAt;
+  bool deleted; // ✅ NOVO: Campo da lixeira
+  DateTime? deletedAt; // ✅ NOVO: Quando foi deletado
 
   Note({
     this.id,
@@ -11,6 +13,8 @@ class Note {
     required this.content,
     this.isPinned = false,
     required this.createdAt,
+    this.deleted = false, // ✅ NOVO: Padrão não deletado
+    this.deletedAt, // ✅ NOVO: Nullable
   });
 
   Map<String, dynamic> toMap() {
@@ -20,6 +24,8 @@ class Note {
       'content': content,
       'isPinned': isPinned ? 1 : 0,
       'createdAt': createdAt.millisecondsSinceEpoch,
+      'deleted': deleted ? 1 : 0, // ✅ NOVO
+      'deletedAt': deletedAt?.millisecondsSinceEpoch, // ✅ NOVO
     };
   }
 
@@ -30,6 +36,10 @@ class Note {
       content: map['content'] ?? '',
       isPinned: (map['isPinned'] ?? 0) == 1,
       createdAt: DateTime.fromMillisecondsSinceEpoch(map['createdAt']),
+      deleted: (map['deleted'] ?? 0) == 1, // ✅ NOVO: Com fallback
+      deletedAt: map['deletedAt'] != null // ✅ NOVO: Com fallback
+          ? DateTime.fromMillisecondsSinceEpoch(map['deletedAt'])
+          : null,
     );
   }
 
@@ -39,6 +49,8 @@ class Note {
     String? content,
     bool? isPinned,
     DateTime? createdAt,
+    bool? deleted, // ✅ NOVO
+    DateTime? deletedAt, // ✅ NOVO
   }) {
     return Note(
       id: id ?? this.id,
@@ -46,6 +58,24 @@ class Note {
       content: content ?? this.content,
       isPinned: isPinned ?? this.isPinned,
       createdAt: createdAt ?? this.createdAt,
+      deleted: deleted ?? this.deleted, // ✅ NOVO
+      deletedAt: deletedAt ?? this.deletedAt, // ✅ NOVO
+    );
+  }
+
+  // ✅ NOVO: Marcar como deletado
+  Note markAsDeleted() {
+    return copyWith(
+      deleted: true,
+      deletedAt: DateTime.now(),
+    );
+  }
+
+  // ✅ NOVO: Restaurar da lixeira
+  Note restore() {
+    return copyWith(
+      deleted: false,
+      deletedAt: null,
     );
   }
 

@@ -19,7 +19,7 @@ class NoteHelper {
     String path = join(await getDatabasesPath(), 'notes.db');
     return await openDatabase(
       path,
-      version: 1,
+      version: 2, // ✅ VERSÃO 2 para lixeira
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -32,13 +32,19 @@ class NoteHelper {
         title TEXT NOT NULL,
         content TEXT NOT NULL,
         isPinned INTEGER NOT NULL DEFAULT 0,
-        createdAt INTEGER NOT NULL
+        createdAt INTEGER NOT NULL,
+        deleted INTEGER NOT NULL DEFAULT 0,
+        deletedAt INTEGER
       )
     ''');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Implement migrations if needed in the future
+    if (oldVersion < 2) {
+      // ✅ MIGRAÇÃO V2: Adicionar campos da lixeira
+      await db.execute('ALTER TABLE notes ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE notes ADD COLUMN deletedAt INTEGER');
+    }
   }
 
   Future<int> insertNote(Note note) async {
@@ -46,17 +52,34 @@ class NoteHelper {
     return await db.insert('notes', note.toMap());
   }
 
+  // ✅ MODIFICADO: Filtrar apenas não deletadas
   Future<List<Note>> getAllNotes() async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query('notes',
+        where: 'deleted = 0',
         orderBy: 'isPinned DESC, createdAt DESC'); // Pinned notes first
     return List.generate(maps.length, (i) => Note.fromMap(maps[i]));
   }
 
-  // ✅ ADICIONADO: Método para obter todas as anotações como Maps (para backup)
+  // ✅ MODIFICADO: Filtrar apenas não deletadas para backup
   Future<List<Map<String, dynamic>>> getAllNotesAsMaps() async {
     final db = await database;
-    return await db.query('notes', orderBy: 'createdAt ASC'); // Ordem por criação para backup
+    return await db.query('notes', where: 'deleted = 0', orderBy: 'createdAt ASC');
+  }
+
+  // ✅ NOVO: Obter anotações deletadas (lixeira)
+  Future<List<Note>> getDeletedNotes() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('notes',
+        where: 'deleted = 1',
+        orderBy: 'deletedAt DESC');
+    return List.generate(maps.length, (i) => Note.fromMap(maps[i]));
+  }
+
+  // ✅ NOVO: Obter anotações deletadas como Maps (para backup)
+  Future<List<Map<String, dynamic>>> getDeletedNotesAsMaps() async {
+    final db = await database;
+    return await db.query('notes', where: 'deleted = 1');
   }
 
   Future<int> updateNote(Note note) async {
@@ -69,14 +92,67 @@ class NoteHelper {
     );
   }
 
+  // ✅ MODIFICADO: Soft delete ao invés de DELETE físico
   Future<int> deleteNote(int id) async {
+    final db = await database;
+    return await db.update(
+      'notes',
+      {
+        'deleted': 1,
+        'deletedAt': DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  // ✅ NOVO: Restaurar anotação da lixeira
+  Future<int> restoreNote(int id) async {
+    final db = await database;
+    return await db.update(
+      'notes',
+      {
+        'deleted': 0,
+        'deletedAt': null,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  // ✅ NOVO: Excluir permanentemente
+  Future<int> deleteNotePermanently(int id) async {
     final db = await database;
     return await db.delete('notes', where: 'id = ?', whereArgs: [id]);
   }
 
-  // ✅ ADICIONADO: Método para deletar todas as anotações (para importação de backup)
+  // ✅ NOVO: Limpar lixeira (excluir todas as deletadas permanentemente)
+  Future<int> emptyTrash() async {
+    final db = await database;
+    return await db.delete('notes', where: 'deleted = 1');
+  }
+
+  // ✅ NOVO: Auto-limpeza da lixeira (itens mais antigos que X dias)
+  Future<int> cleanOldDeletedNotes(int daysOld) async {
+    final db = await database;
+    final cutoffDate = DateTime.now().subtract(Duration(days: daysOld)).millisecondsSinceEpoch;
+    return await db.delete(
+      'notes',
+      where: 'deleted = 1 AND deletedAt < ?',
+      whereArgs: [cutoffDate],
+    );
+  }
+
+  // ✅ MODIFICADO: Deletar todas não deletadas (para backup)
   Future<int> deleteAllNotes() async {
     final db = await database;
-    return await db.delete('notes');
+    return await db.update(
+      'notes',
+      {
+        'deleted': 1,
+        'deletedAt': DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'deleted = 0',
+    );
   }
 }

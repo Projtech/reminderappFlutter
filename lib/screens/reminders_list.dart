@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import '../database/database_helper.dart';
 import '../models/reminder.dart';
@@ -9,6 +10,8 @@ import 'package:intl/intl.dart';
 import 'manage_categories_screen.dart';
 import '../database/category_helper.dart';
 import '../main.dart';
+
+enum DateFilter { todos, hoje, amanha, estaSemana, dataEspecifica }
 
 class RemindersListScreen extends StatefulWidget {
   const RemindersListScreen({super.key});
@@ -28,6 +31,10 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
   bool _isSearching = false;
   String? _selectedCategoryFilter;
   Map<String, Color> _categoryColorMap = {};
+  
+  // ✅ NOVOS: Estados dos filtros de data
+  DateFilter _selectedDateFilter = DateFilter.todos;
+  DateTime? _specificDate;
 
   @override
   void initState() {
@@ -104,22 +111,268 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
     }
   }
 
+  // ✅ NOVA: Lógica de filtros atualizada
   void _filterReminders() {
     setState(() {
       _filteredReminders = _reminders.where((reminder) {
+        // Filtro de busca por texto
         final searchTerm = _searchController.text.toLowerCase();
         final matchesSearch = searchTerm.isEmpty ||
             reminder.title.toLowerCase().contains(searchTerm) ||
             reminder.description.toLowerCase().contains(searchTerm) ||
             reminder.category.toLowerCase().contains(searchTerm);
 
+        // Filtro por categoria
         final matchesCategory = _selectedCategoryFilter == null ||
             reminder.category.toLowerCase() == _selectedCategoryFilter!.toLowerCase();
 
-        return matchesSearch && matchesCategory;
+        // ✅ NOVO: Filtro por data
+        final matchesDate = _matchesDateFilter(reminder);
+
+        return matchesSearch && matchesCategory && matchesDate;
       }).toList();
       _filteredReminders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     });
+  }
+
+  // ✅ NOVA: Função para verificar se lembrete passa no filtro de data
+  bool _matchesDateFilter(Reminder reminder) {
+    final now = DateTime.now();
+    final reminderDate = reminder.dateTime;
+    
+    switch (_selectedDateFilter) {
+      case DateFilter.todos:
+        return true;
+        
+      case DateFilter.hoje:
+        return _isSameDay(reminderDate, now);
+        
+      case DateFilter.amanha:
+        final tomorrow = now.add(const Duration(days: 1));
+        return _isSameDay(reminderDate, tomorrow);
+        
+      case DateFilter.estaSemana:
+        final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+        final endOfWeek = startOfWeek.add(const Duration(days: 6));
+        return reminderDate.isAfter(startOfWeek.subtract(const Duration(days: 1))) &&
+               reminderDate.isBefore(endOfWeek.add(const Duration(days: 1)));
+               
+      case DateFilter.dataEspecifica:
+        return _specificDate != null && _isSameDay(reminderDate, _specificDate!);
+    }
+  }
+
+  // ✅ NOVA: Função auxiliar para comparar datas
+  bool _isSameDay(DateTime date1, DateTime date2) {
+    return date1.year == date2.year &&
+           date1.month == date2.month &&
+           date1.day == date2.day;
+  }
+
+  // ✅ NOVA: Contar lembretes por filtro
+  int _getFilterCount(DateFilter filter) {
+    return _reminders.where((reminder) {
+      switch (filter) {
+        case DateFilter.todos:
+          return true;
+        case DateFilter.hoje:
+          return _isSameDay(reminder.dateTime, DateTime.now());
+        case DateFilter.amanha:
+          final tomorrow = DateTime.now().add(const Duration(days: 1));
+          return _isSameDay(reminder.dateTime, tomorrow);
+        case DateFilter.estaSemana:
+          final now = DateTime.now();
+          final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+          final endOfWeek = startOfWeek.add(const Duration(days: 6));
+          return reminder.dateTime.isAfter(startOfWeek.subtract(const Duration(days: 1))) &&
+                 reminder.dateTime.isBefore(endOfWeek.add(const Duration(days: 1)));
+        case DateFilter.dataEspecifica:
+          return _specificDate != null && _isSameDay(reminder.dateTime, _specificDate!);
+      }
+    }).length;
+  }
+
+  // ✅ NOVA: Seletor de data específica
+  Future<void> _selectSpecificDate() async {
+    DateTime tempDate = _specificDate ?? DateTime.now();
+    
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: 300,
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: Colors.grey.withOpacity(0.3),
+                    width: 0.5,
+                  ),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      'Cancelar',
+                      style: TextStyle(color: Colors.grey, fontSize: 16),
+                    ),
+                  ),
+                  const Text(
+                    'Escolher Data',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _specificDate = tempDate;
+                        _selectedDateFilter = DateFilter.dataEspecifica;
+                        _filterReminders();
+                      });
+                      Navigator.pop(context);
+                    },
+                    child: const Text(
+                      'Confirmar',
+                      style: TextStyle(color: Colors.blue, fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.date,
+                initialDateTime: tempDate,
+                minimumDate: DateTime.now().subtract(const Duration(days: 365)),
+                maximumDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                onDateTimeChanged: (DateTime newDate) {
+                  tempDate = newDate;
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ✅ NOVO: Widget dos chips de filtro
+  Widget _buildDateFilterChips() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
+    return Container(
+      height: 60,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          _buildFilterChip(
+            'Todos',
+            DateFilter.todos,
+            _getFilterCount(DateFilter.todos),
+            isDark,
+          ),
+          const SizedBox(width: 8),
+          _buildFilterChip(
+            'Hoje',
+            DateFilter.hoje,
+            _getFilterCount(DateFilter.hoje),
+            isDark,
+          ),
+          const SizedBox(width: 8),
+          _buildFilterChip(
+            'Amanhã',
+            DateFilter.amanha,
+            _getFilterCount(DateFilter.amanha),
+            isDark,
+          ),
+          const SizedBox(width: 8),
+          _buildFilterChip(
+            'Esta Semana',
+            DateFilter.estaSemana,
+            _getFilterCount(DateFilter.estaSemana),
+            isDark,
+          ),
+          const SizedBox(width: 8),
+          _buildDatePickerChip(isDark),
+        ],
+      ),
+    );
+  }
+
+  // ✅ NOVO: Chip individual de filtro
+  Widget _buildFilterChip(String label, DateFilter filter, int count, bool isDark) {
+    final isSelected = _selectedDateFilter == filter;
+    
+    return FilterChip(
+      label: Text(
+        count > 0 ? '$label ($count)' : label,
+        style: TextStyle(
+          color: isSelected 
+              ? Colors.white 
+              : (isDark ? Colors.grey[300] : Colors.grey[700]),
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+        ),
+      ),
+      selected: isSelected,
+      onSelected: (selected) {
+        setState(() {
+          _selectedDateFilter = filter;
+          if (filter != DateFilter.dataEspecifica) {
+            _specificDate = null;
+          }
+          _filterReminders();
+        });
+      },
+      backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200],
+      selectedColor: const Color.fromARGB(144, 33, 149, 243),
+      checkmarkColor: Colors.white,
+      side: BorderSide(
+        color: isSelected ? Colors.blue : Colors.transparent,
+        width: 1,
+      ),
+    );
+  }
+
+  // ✅ NOVO: Chip do seletor de data
+  Widget _buildDatePickerChip(bool isDark) {
+    final isSelected = _selectedDateFilter == DateFilter.dataEspecifica;
+    final label = isSelected && _specificDate != null
+        ? DateFormat('dd/MM').format(_specificDate!)
+        : '📅';
+    
+    return FilterChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          color: isSelected 
+              ? Colors.white 
+              : (isDark ? Colors.grey[300] : Colors.grey[700]),
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+        ),
+      ),
+      selected: isSelected,
+      onSelected: (selected) {
+        _selectSpecificDate();
+      },
+      backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200],
+      selectedColor: Colors.blue,
+      checkmarkColor: Colors.white,
+      side: BorderSide(
+        color: isSelected ? Colors.blue : Colors.transparent,
+        width: 1,
+      ),
+    );
   }
 
   Widget _buildReminderItem(Reminder reminder) {
@@ -681,190 +934,192 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
               setState(() {
                 _isSearching = !_isSearching;
                 if (!_isSearching) {
-                  _searchController.clear();
-                }
-              });
-            },
-          ),
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              setState(() {
-                _selectedCategoryFilter = value == 'all' ? null : value;
-                _filterReminders();
-              });
-            },
-            itemBuilder: (context) {
-              return [
-                const PopupMenuItem(
-                  value: 'all',
-                  child: Text('Todas as categorias'),
-                ),
-                ..._categoryColorMap.keys.map((normalizedCategory) {
-                  final color = _categoryColorMap[normalizedCategory] ?? Colors.grey;
-                  return PopupMenuItem(
-                    value: normalizedCategory,
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 12,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: color,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(normalizedCategory),
-                      ],
-                    ),
-                  );
-                }),
-              ];
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _filteredReminders.isEmpty
-                    ? _buildEmptyState()
-                    : ListView.builder(
-                        padding: const EdgeInsets.only(bottom: 80),
-                        itemCount: _filteredReminders.length,
-                        itemBuilder: (context, index) {
-                          final reminder = _filteredReminders[index];
-                          return _buildReminderItem(reminder);
-                        },
-                      ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addReminder,
-        backgroundColor: Colors.blue,
-        child: const Icon(Icons.add),
-      ),
-      drawer: _buildDrawer(),
-    );
-  }
+                 _searchController.clear();
+               }
+             });
+           },
+         ),
+         PopupMenuButton<String>(
+           onSelected: (value) {
+             setState(() {
+               _selectedCategoryFilter = value == 'all' ? null : value;
+               _filterReminders();
+             });
+           },
+           itemBuilder: (context) {
+             return [
+               const PopupMenuItem(
+                 value: 'all',
+                 child: Text('Todas as categorias'),
+               ),
+               ..._categoryColorMap.keys.map((normalizedCategory) {
+                 final color = _categoryColorMap[normalizedCategory] ?? Colors.grey;
+                 return PopupMenuItem(
+                   value: normalizedCategory,
+                   child: Row(
+                     children: [
+                       Container(
+                         width: 12,
+                         height: 12,
+                         decoration: BoxDecoration(
+                           color: color,
+                           shape: BoxShape.circle,
+                         ),
+                       ),
+                       const SizedBox(width: 8),
+                       Text(normalizedCategory),
+                     ],
+                   ),
+                 );
+               }),
+             ];
+           },
+         ),
+       ],
+     ),
+     body: Column(
+       children: [
+         // ✅ NOVO: Chips de filtro de data
+         _buildDateFilterChips(),
+         Expanded(
+           child: _isLoading
+               ? const Center(child: CircularProgressIndicator())
+               : _filteredReminders.isEmpty
+                   ? _buildEmptyState()
+                   : ListView.builder(
+                       padding: const EdgeInsets.only(bottom: 80),
+                       itemCount: _filteredReminders.length,
+                       itemBuilder: (context, index) {
+                         final reminder = _filteredReminders[index];
+                         return _buildReminderItem(reminder);
+                       },
+                     ),
+         ),
+       ],
+     ),
+     floatingActionButton: FloatingActionButton(
+       onPressed: _addReminder,
+       backgroundColor: Colors.blue,
+       child: const Icon(Icons.add),
+     ),
+     drawer: _buildDrawer(),
+   );
+ }
 
-  Widget _buildDrawer() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: <Widget>[
-          DrawerHeader(
-            decoration: BoxDecoration(
-              color: isDark ? Colors.grey[800] : Colors.blue,
-            ),
-            child: const Text(
-              'Configurações',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-              ),
-            ),
-          ),
-          
-          ListTile(
-            leading: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
-            title: Text(isDark ? 'Modo Claro' : 'Modo Escuro'),
-            trailing: Switch(
-              value: isDark,
-              onChanged: (value) {
-                MyApp.of(context)?.changeTheme(value ? ThemeMode.dark : ThemeMode.light);
-              },
-            ),
-            onTap: () {
-              final newMode = isDark ? ThemeMode.light : ThemeMode.dark;
-              MyApp.of(context)?.changeTheme(newMode);
-            },
-          ),
-          
-          ListTile(
-            leading: const Icon(Icons.category),
-            title: const Text('Gerenciar Categorias'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ManageCategoriesScreen()),
-              ).then((_) {
-                _loadReminders();
-              });
-            },
-          ),
-          
-          const Divider(),
-          
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(
-              'BACKUP',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
-              ),
-            ),
-          ),
-          
-          ListTile(
-            leading: const Icon(Icons.file_download),
-            title: const Text("Importar Backup"),
-            onTap: () {
-              Navigator.pop(context);
-              _importBackup(); 
-            },
-          ),
-          
-          ListTile(
-            leading: const Icon(Icons.file_upload),
-            title: const Text("Exportar Backup"),
-            onTap: () {
-              Navigator.pop(context);
-              _exportBackup(); 
-            },
-          ),
-          
-          const Divider(),
-          
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(
-              'NOTIFICAÇÕES',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
-              ),
-            ),
-          ),
-          
-          ListTile(
-            leading: const Icon(Icons.notifications_active),
-            title: const Text('Autorizar Notificações'),
-            onTap: () {
-              Navigator.pop(context);
-              NotificationService.openSettingsAndRequestPermissions();
-            },
-          ),
-          
-          ListTile(
-            leading: const Icon(Icons.battery_saver),
-            title: const Text('🔋 Desativar otimização de bateria'),
-            subtitle: const Text('Desabilitar otimização de bateria'),
-            onTap: () async {
-              Navigator.pop(context);
-              await NotificationService.requestBatteryOptimizationDisable();
-            },
-          ),
-        ],
-      ),
-    );
-  }
+ Widget _buildDrawer() {
+   final isDark = Theme.of(context).brightness == Brightness.dark;
+   return Drawer(
+     child: ListView(
+       padding: EdgeInsets.zero,
+       children: <Widget>[
+         DrawerHeader(
+           decoration: BoxDecoration(
+             color: isDark ? Colors.grey[800] : Colors.blue,
+           ),
+           child: const Text(
+             'Configurações',
+             style: TextStyle(
+               color: Colors.white,
+               fontSize: 24,
+             ),
+           ),
+         ),
+         
+         ListTile(
+           leading: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+           title: Text(isDark ? 'Modo Claro' : 'Modo Escuro'),
+           trailing: Switch(
+             value: isDark,
+             onChanged: (value) {
+               MyApp.of(context)?.changeTheme(value ? ThemeMode.dark : ThemeMode.light);
+             },
+           ),
+           onTap: () {
+             final newMode = isDark ? ThemeMode.light : ThemeMode.dark;
+             MyApp.of(context)?.changeTheme(newMode);
+           },
+         ),
+         
+         ListTile(
+           leading: const Icon(Icons.category),
+           title: const Text('Gerenciar Categorias'),
+           onTap: () {
+             Navigator.pop(context);
+             Navigator.push(
+               context,
+               MaterialPageRoute(builder: (context) => const ManageCategoriesScreen()),
+             ).then((_) {
+               _loadReminders();
+             });
+           },
+         ),
+         
+         const Divider(),
+         
+         Padding(
+           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+           child: Text(
+             'BACKUP',
+             style: TextStyle(
+               fontSize: 12,
+               fontWeight: FontWeight.bold,
+               color: isDark ? Colors.grey[400] : Colors.grey[600],
+             ),
+           ),
+         ),
+         
+         ListTile(
+           leading: const Icon(Icons.file_download),
+           title: const Text("Importar Backup"),
+           onTap: () {
+             Navigator.pop(context);
+             _importBackup(); 
+           },
+         ),
+         
+         ListTile(
+           leading: const Icon(Icons.file_upload),
+           title: const Text("Exportar Backup"),
+           onTap: () {
+             Navigator.pop(context);
+             _exportBackup(); 
+           },
+         ),
+         
+         const Divider(),
+         
+         Padding(
+           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+           child: Text(
+             'NOTIFICAÇÕES',
+             style: TextStyle(
+               fontSize: 12,
+               fontWeight: FontWeight.bold,
+               color: isDark ? Colors.grey[400] : Colors.grey[600],
+             ),
+           ),
+         ),
+         
+         ListTile(
+           leading: const Icon(Icons.notifications_active),
+           title: const Text('Autorizar Notificações'),
+           onTap: () {
+             Navigator.pop(context);
+             NotificationService.openSettingsAndRequestPermissions();
+           },
+         ),
+         
+         ListTile(
+           leading: const Icon(Icons.battery_saver),
+           title: const Text('🔋 Desativar otimização de bateria'),
+           subtitle: const Text('Desabilitar otimização de bateria'),
+           onTap: () async {
+             Navigator.pop(context);
+             await NotificationService.requestBatteryOptimizationDisable();
+           },
+         ),
+       ],
+     ),
+   );
+ }
 }

@@ -4,12 +4,14 @@ class Reminder {
   String description;
   String category;
   DateTime dateTime;
-  DateTime createdAt; // ✅ NOVO CAMPO
+  DateTime createdAt;
   bool isCompleted;
   bool isRecurring;
   String? recurringType; // none, daily, weekly, monthly, custom_daily, custom_weekly, custom_monthly
   int recurrenceInterval; // Para custom: "a cada X dias/semanas/meses"
   bool notificationsEnabled;
+  bool deleted; // ✅ NOVO: Campo da lixeira
+  DateTime? deletedAt; // ✅ NOVO: Quando foi deletado
 
   Reminder({
     this.id,
@@ -17,13 +19,15 @@ class Reminder {
     required this.description,
     required this.category,
     required this.dateTime,
-    DateTime? createdAt, // ✅ NOVO PARÂMETRO
+    DateTime? createdAt,
     this.isCompleted = false,
     this.isRecurring = false,
     this.recurringType,
-    this.recurrenceInterval = 1, // ✅ NOVO: padrão 1
+    this.recurrenceInterval = 1,
     this.notificationsEnabled = true,
-  }) : createdAt = createdAt ?? DateTime.now(); // ✅ VALOR PADRÃO
+    this.deleted = false, // ✅ NOVO: Padrão não deletado
+    this.deletedAt, // ✅ NOVO: Nullable
+  }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toMap() {
     return {
@@ -32,12 +36,14 @@ class Reminder {
       'description': description,
       'category': category,
       'dateTime': dateTime.millisecondsSinceEpoch,
-      'createdAt': createdAt.millisecondsSinceEpoch, // ✅ NOVO
+      'createdAt': createdAt.millisecondsSinceEpoch,
       'isCompleted': isCompleted ? 1 : 0,
       'isRecurring': isRecurring ? 1 : 0,
       'recurringType': recurringType,
-      'recurrenceInterval': recurrenceInterval, // ✅ NOVO
+      'recurrenceInterval': recurrenceInterval,
       'notificationsEnabled': notificationsEnabled ? 1 : 0,
+      'deleted': deleted ? 1 : 0, // ✅ NOVO
+      'deletedAt': deletedAt?.millisecondsSinceEpoch, // ✅ NOVO
     };
   }
 
@@ -50,12 +56,16 @@ class Reminder {
       dateTime: DateTime.fromMillisecondsSinceEpoch(map['dateTime']),
       createdAt: map['createdAt'] != null 
           ? DateTime.fromMillisecondsSinceEpoch(map['createdAt'])
-          : DateTime.now(), // ✅ NOVO COM FALLBACK
+          : DateTime.now(),
       isCompleted: map['isCompleted'] == 1,
       isRecurring: (map['isRecurring'] ?? 0) == 1,
       recurringType: map['recurringType'],
-      recurrenceInterval: map['recurrenceInterval'] ?? 1, // ✅ NOVO: padrão 1
+      recurrenceInterval: map['recurrenceInterval'] ?? 1,
       notificationsEnabled: (map['notificationsEnabled'] ?? 1) == 1,
+      deleted: (map['deleted'] ?? 0) == 1, // ✅ NOVO: Com fallback
+      deletedAt: map['deletedAt'] != null // ✅ NOVO: Com fallback
+          ? DateTime.fromMillisecondsSinceEpoch(map['deletedAt'])
+          : null,
     );
   }
 
@@ -65,12 +75,14 @@ class Reminder {
     String? description,
     String? category,
     DateTime? dateTime,
-    DateTime? createdAt, // ✅ NOVO
+    DateTime? createdAt,
     bool? isCompleted,
     bool? isRecurring,
     String? recurringType,
-    int? recurrenceInterval, // ✅ NOVO
+    int? recurrenceInterval,
     bool? notificationsEnabled,
+    bool? deleted, // ✅ NOVO
+    DateTime? deletedAt, // ✅ NOVO
   }) {
     return Reminder(
       id: id ?? this.id,
@@ -78,12 +90,30 @@ class Reminder {
       description: description ?? this.description,
       category: category ?? this.category,
       dateTime: dateTime ?? this.dateTime,
-      createdAt: createdAt ?? this.createdAt, // ✅ NOVO
+      createdAt: createdAt ?? this.createdAt,
       isCompleted: isCompleted ?? this.isCompleted,
       isRecurring: isRecurring ?? this.isRecurring,
       recurringType: recurringType ?? this.recurringType,
-      recurrenceInterval: recurrenceInterval ?? this.recurrenceInterval, // ✅ NOVO
+      recurrenceInterval: recurrenceInterval ?? this.recurrenceInterval,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+      deleted: deleted ?? this.deleted, // ✅ NOVO
+      deletedAt: deletedAt ?? this.deletedAt, // ✅ NOVO
+    );
+  }
+
+  // ✅ NOVO: Marcar como deletado
+  Reminder markAsDeleted() {
+    return copyWith(
+      deleted: true,
+      deletedAt: DateTime.now(),
+    );
+  }
+
+  // ✅ NOVO: Restaurar da lixeira
+  Reminder restore() {
+    return copyWith(
+      deleted: false,
+      deletedAt: null,
     );
   }
 
