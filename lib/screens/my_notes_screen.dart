@@ -4,7 +4,8 @@ import '../models/note.dart';
 import 'package:intl/intl.dart';
 import 'add_note_screen.dart';
 import '../main.dart';
-import '../services/backup_service.dart'; // ✅ ADICIONADO: Import do backup service
+import '../services/backup_service.dart';
+import 'notes_trash_screen.dart'; // ✅ NOVO: Import da lixeira
 
 class MyNotesScreen extends StatefulWidget {
   const MyNotesScreen({super.key});
@@ -16,7 +17,7 @@ class MyNotesScreen extends StatefulWidget {
 class _MyNotesScreenState extends State<MyNotesScreen> {
   final NoteHelper _noteHelper = NoteHelper();
   final TextEditingController _searchController = TextEditingController();
-  final BackupService _backupService = BackupService(); // ✅ ADICIONADO: Instância do backup service
+  final BackupService _backupService = BackupService();
   List<Note> _notes = [];
   List<Note> _filteredNotes = [];
   bool _isLoading = true;
@@ -82,176 +83,6 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
     });
   }
 
-  Future<void> _deleteNote(Note note) async {
-    try {
-      await _noteHelper.deleteNote(note.id!);
-      await _loadNotes();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Anotação \'${note.title}\' excluída'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao excluir anotação: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _togglePinNote(Note note) async {
-    try {
-      final updatedNote = note.copyWith(isPinned: !note.isPinned);
-      await _noteHelper.updateNote(updatedNote);
-      await _loadNotes();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Anotação \'${note.title}\' ${updatedNote.isPinned ? 'fixada' : 'desafixada'}'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao ${note.isPinned ? 'desafixar' : 'fixar'} anotação: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<bool> _showDeleteConfirmation(Note note) async {
-    return await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmar Exclusão'),
-        content: Text('Tem certeza que deseja excluir a anotação \'${note.title}\'?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Excluir'),
-          ),
-        ],
-      ),
-    ) ?? false;
-  }
-
-  // ✅ MODIFICAÇÃO: Função para exportar backup com aviso
-  Future<void> _exportBackup() async {
-    // Mostrar diálogo explicativo antes de exportar
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Exportar Backup Completo'),
-        content: const Text(
-          'Esta ação irá exportar TODOS os seus dados:\n\n'
-          '• Todos os lembretes\n'
-          '• Todas as anotações\n'
-          '• Todas as categorias\n\n'
-          'Deseja continuar?'
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Exportar Tudo'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      try {
-        await _backupService.exportBackup(context);
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Erro inesperado: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  // ✅ MODIFICAÇÃO: Função para importar backup com aviso
-  Future<void> _importBackup() async {
-    // Mostrar diálogo explicativo antes de importar
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Importar Backup Completo'),
-        content: const Text(
-          'Esta ação irá importar TODOS os dados do backup:\n\n'
-          '• Todos os lembretes\n'
-          '• Todas as anotações\n'
-          '• Todas as categorias\n\n'
-          '⚠️ ATENÇÃO: Dados existentes podem ser substituídos!\n\n'
-          'Deseja continuar?'
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-            ),
-            child: const Text('Importar Tudo'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      try {
-        final success = await _backupService.importBackup(context);
-        if (success && mounted) {
-          // Recarrega as anotações após importar backup
-          await _loadNotes();
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Erro inesperado: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -299,7 +130,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
           ),
         ],
       ),
-      drawer: _buildDrawer(context),
+      drawer: _buildDrawer(context), // ✅ RESTAURADO: Menu hambúrguer
       body: RefreshIndicator(
         onRefresh: _loadNotes,
         child: Column(
@@ -459,6 +290,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
     );
   }
 
+  // ✅ RESTAURADO: Menu hambúrguer original + lixeira
   Widget _buildDrawer(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Drawer(
@@ -492,10 +324,25 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
               MyApp.of(context)?.changeTheme(newMode);
             },
           ),
+
+          // ✅ NOVO: Lixeira no menu hambúrguer
+          ListTile(
+            leading: const Icon(Icons.delete_outline),
+            title: const Text('Lixeira de Anotações'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const NotesTrashScreen()),
+              ).then((_) {
+                _loadNotes();
+              });
+            },
+          ),
           
           const Divider(),
           
-          // ✅ SEÇÃO DE BACKUP
+          // SEÇÃO DE BACKUP
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
@@ -513,7 +360,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
             title: const Text("Importar Backup"),
             onTap: () {
               Navigator.pop(context);
-              _importBackup(); // ✅ CONECTADO: Chama função de importar
+              _importBackup();
             },
           ),
           
@@ -522,7 +369,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
             title: const Text("Exportar Backup"),
             onTap: () {
               Navigator.pop(context);
-              _exportBackup(); // ✅ CONECTADO: Chama função de exportar
+              _exportBackup();
             },
           ),
           
@@ -530,5 +377,185 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
         ],
       ),
     );
+  }
+
+  // ✅ CORRIGIDO: Usar restoreNote() ao invés de re-inserir
+  Future<void> _deleteNote(Note note) async {
+    try {
+      await _noteHelper.deleteNote(note.id!);
+      await _loadNotes();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Anotação movida para lixeira'),
+            backgroundColor: Colors.orange,
+            action: SnackBarAction(
+              label: 'Desfazer',
+              onPressed: () async {
+                // ✅ CORRIGIDO: Usar restoreNote() ao invés de re-inserir
+                await _noteHelper.restoreNote(note.id!);
+                await _loadNotes();
+              },
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao excluir anotação: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _togglePinNote(Note note) async {
+    try {
+      final updatedNote = note.copyWith(isPinned: !note.isPinned);
+      await _noteHelper.updateNote(updatedNote);
+      await _loadNotes();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Anotação "${note.title}" ${updatedNote.isPinned ? 'fixada' : 'desafixada'}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao ${note.isPinned ? 'desafixar' : 'fixar'} anotação: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // ✅ CORRIGIDO: Diálogo atualizado para lixeira
+  Future<bool> _showDeleteConfirmation(Note note) async {
+    return await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Mover para lixeira?'),
+        content: Text('A anotação "${note.title}" será movida para a lixeira e poderá ser restaurada posteriormente.'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.orange),
+            child: const Text('Mover para Lixeira'),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
+
+  Future<void> _exportBackup() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Exportar Backup Completo'),
+        content: const Text(
+          'Esta ação irá exportar TODOS os seus dados:\n\n'
+          '• Todos os lembretes\n'
+          '• Todas as anotações\n'
+          '• Todas as categorias\n\n'
+          'Deseja continuar?'
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Exportar Tudo'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await _backupService.exportBackup(context);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erro inesperado: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _importBackup() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Importar Backup'),
+        content: const Text(
+          'Esta ação irá importar TODOS os dados do backup:\n\n'
+          '• Todos os lembretes\n'
+          '• Todas as anotações\n'
+          '• Todas as categorias\n\n'
+          '⚠️ ATENÇÃO: Dados existentes podem ser substituídos!\n\n'
+          'Deseja continuar?'
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+            ),
+            child: const Text('Importar Mesmo Assim'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        final success = await _backupService.importBackup(context);
+        if (success) {
+          _loadNotes();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erro inesperado: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 }

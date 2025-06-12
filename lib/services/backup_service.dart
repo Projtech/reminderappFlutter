@@ -5,7 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import '../database/database_helper.dart';
 import '../database/category_helper.dart';
-import '../database/note_helper.dart'; // ✅ ADICIONADO: Import do note_helper
+import '../database/note_helper.dart';
 import '../models/reminder.dart';
 import '../services/notification_service.dart';
 import '../models/note.dart';
@@ -13,7 +13,7 @@ import '../models/note.dart';
 class BackupService {
   final DatabaseHelper _dbHelper = DatabaseHelper();
   final CategoryHelper _catHelper = CategoryHelper();
-  final NoteHelper _noteHelper = NoteHelper(); // ✅ ADICIONADO: Instância do note_helper
+  final NoteHelper _noteHelper = NoteHelper();
 
   // Função auxiliar para mostrar SnackBar
   void _showSnackBar(BuildContext context, String message, Color color) {
@@ -28,26 +28,79 @@ class BackupService {
     }
   }
 
+  // ✅ NOVO: Método para mostrar opções de backup
   Future<String?> exportBackup(BuildContext context) async {
+    // Mostrar diálogo de opções de backup
+    final backupOption = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Opções de Backup'),
+        content: const Text(
+          'Escolha o tipo de backup que deseja exportar:'
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, 'active'),
+            child: const Text('Apenas Dados Ativos'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, 'complete'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+            ),
+            child: const Text('Backup Completo (com Lixeira)'),
+          ),
+        ],
+      ),
+    );
+
+    if (backupOption == null) return null;
+
+    final includeTrash = backupOption == 'complete';
+    return await _performExport(context, includeTrash);
+  }
+
+  // ✅ NOVO: Realizar exportação com ou sem lixeira
+  Future<String?> _performExport(BuildContext context, bool includeTrash) async {
     try {
-      // ✅ ATUALIZADO: Coletando dados dos 3 bancos (incluindo createdAt nos reminders)
+      // Coletando dados ativos
       final reminders = await _dbHelper.getAllRemindersAsMaps();
       final categories = await _catHelper.getAllCategories();
       final notes = await _noteHelper.getAllNotesAsMaps();
 
+      // ✅ NOVO: Coletando dados da lixeira se solicitado
+      final deletedReminders = includeTrash ? await _dbHelper.getDeletedRemindersAsMaps() : <Map<String, dynamic>>[];
+      final deletedNotes = includeTrash ? await _noteHelper.getDeletedNotesAsMaps() : <Map<String, dynamic>>[];
+
       final backupData = {
-        'version': 2, // ✅ VERSÃO 2 para incluir createdAt
+        'version': includeTrash ? 3 : 2, // ✅ VERSÃO 3 para backup com lixeira
         'createdAt': DateTime.now().toIso8601String(),
+        'includeTrash': includeTrash,
         'categories': categories,
-        'reminders': reminders, // ✅ Agora inclui createdAt automaticamente
+        'reminders': reminders,
         'notes': notes,
+        if (includeTrash) ...{
+          'deletedReminders': deletedReminders,
+          'deletedNotes': deletedNotes,
+        },
       };
 
       final jsonString = jsonEncode(backupData);
 
+      final fileName = includeTrash 
+          ? 'backup_completo_${DateFormat('dd-MM-yyyy').format(DateTime.now())}.json'
+          : 'backup_ativo_${DateFormat('dd-MM-yyyy').format(DateTime.now())}.json';
+
       String? outputFile = await FilePicker.platform.saveFile(
         dialogTitle: 'Salvar Backup Como',
-        fileName: 'lembretes_${DateFormat('dd-MM-yyyy').format(DateTime.now())}.json',
+        fileName: fileName,
         bytes: utf8.encode(jsonString),
       );
 
@@ -59,7 +112,10 @@ class BackupService {
       }
 
       if (context.mounted) {
-         _showSnackBar(context, 'Backup exportado com sucesso!', Colors.green);
+        final message = includeTrash 
+            ? 'Backup completo (com lixeira) exportado com sucesso!'
+            : 'Backup dos dados ativos exportado com sucesso!';
+        _showSnackBar(context, message, Colors.green);
       }
       return outputFile;
 
@@ -90,20 +146,34 @@ class BackupService {
       final jsonString = await file.readAsString();
       final backupData = jsonDecode(jsonString) as Map<String, dynamic>;
 
-      // ✅ ATUALIZADO: Suporte para versões 1 e 2 do backup
+      // ✅ ATUALIZADO: Suporte para versões 1, 2 e 3 do backup
       final version = backupData['version'] ?? 1;
-      if (version < 1 || version > 2 || 
+      final includeTrash = backupData['includeTrash'] ?? false;
+      
+      if (version < 1 || version > 3 || 
           backupData['categories'] == null || 
           backupData['reminders'] == null ||
           backupData['notes'] == null) {
         throw const FormatException('Formato de backup inválido ou não suportado.');
       }
 
+      // ✅ NOVO: Mostrar informações do backup antes de importar
+      final confirmed = await _showImportConfirmation(context, version, includeTrash);
+      if (!confirmed) return false;
+
       final categories = (backupData['categories'] as List).cast<Map<String, dynamic>>();
       final reminders = (backupData['reminders'] as List).cast<Map<String, dynamic>>();
       final notes = (backupData['notes'] as List).cast<Map<String, dynamic>>();
+      
+      // ✅ NOVO: Dados da lixeira (versão 3)
+      final deletedReminders = version >= 3 && includeTrash 
+          ? (backupData['deletedReminders'] as List?)?.cast<Map<String, dynamic>>() ?? <Map<String, dynamic>>[]
+          : <Map<String, dynamic>>[];
+      final deletedNotes = version >= 3 && includeTrash 
+          ? (backupData['deletedNotes'] as List?)?.cast<Map<String, dynamic>>() ?? <Map<String, dynamic>>[]
+          : <Map<String, dynamic>>[];
 
-      // Limpando os 3 bancos
+      // Limpando os bancos (apenas dados ativos)
       await _catHelper.deleteAllCategoriesExceptDefault();
       await _dbHelper.deleteAllReminders();
       await _noteHelper.deleteAllNotes();
@@ -119,10 +189,10 @@ class BackupService {
         }
       }
 
-      // ✅ ATUALIZADO: Importando lembretes (com suporte a createdAt)
+      // ✅ ATUALIZADO: Importando lembretes ativos
       for (final reminderMap in reminders) {
         try {
-          // ✅ Para backups antigos (versão 1), adicionar createdAt se não existir
+          // Para backups antigos (versão 1), adicionar createdAt se não existir
           if (version == 1 && reminderMap['createdAt'] == null) {
             reminderMap['createdAt'] = DateTime.now().millisecondsSinceEpoch;
           }
@@ -143,29 +213,55 @@ class BackupService {
             );
           }
         } catch (e) {
-          // Log do erro individual sem interromper o processo
           debugPrint('Erro ao importar lembrete: $e');
         }
       }
 
-      // Importando anotações
+      // ✅ NOVO: Importando lembretes deletados (se houver)
+      for (final reminderMap in deletedReminders) {
+        try {
+          if (version <= 2 && reminderMap['createdAt'] == null) {
+            reminderMap['createdAt'] = DateTime.now().millisecondsSinceEpoch;
+          }
+          
+          final reminder = Reminder.fromMap(reminderMap);
+          await _dbHelper.insertReminder(reminder);
+        } catch (e) {
+          debugPrint('Erro ao importar lembrete deletado: $e');
+        }
+      }
+
+      // Importando anotações ativas
       for (final noteMap in notes) {
         try {
-          // Remove o ID para que seja gerado automaticamente
           final noteMapWithoutId = Map<String, dynamic>.from(noteMap);
           noteMapWithoutId.remove('id');
           
-          // Cria a anotação sem ID
           final note = Note.fromMap(noteMapWithoutId);
           await _noteHelper.insertNote(note);
         } catch (e) {
-          // Log do erro individual sem interromper o processo
           debugPrint('Erro ao importar anotação: $e');
         }
       }
 
+      // ✅ NOVO: Importando anotações deletadas (se houver)
+      for (final noteMap in deletedNotes) {
+        try {
+          final noteMapWithoutId = Map<String, dynamic>.from(noteMap);
+          noteMapWithoutId.remove('id');
+          
+          final note = Note.fromMap(noteMapWithoutId);
+          await _noteHelper.insertNote(note);
+        } catch (e) {
+          debugPrint('Erro ao importar anotação deletada: $e');
+        }
+      }
+
       if (context.mounted) {
-         _showSnackBar(context, 'Backup importado com sucesso!', Colors.green);
+        final message = includeTrash 
+            ? 'Backup completo (com lixeira) importado com sucesso!'
+            : 'Backup importado com sucesso!';
+        _showSnackBar(context, message, Colors.green);
       }
       return true;
 
@@ -175,5 +271,55 @@ class BackupService {
       }
       return false;
     }
+  }
+
+  // ✅ NOVO: Diálogo de confirmação com informações do backup
+  Future<bool> _showImportConfirmation(BuildContext context, int version, bool includeTrash) async {
+    final versionText = version == 1 ? 'v1 (Básico)' 
+                      : version == 2 ? 'v2 (com CreatedAt)' 
+                      : 'v3 (com Lixeira)';
+    
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar Importação'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Informações do backup:'),
+            const SizedBox(height: 8),
+            Text('• Versão: $versionText'),
+            Text('• Inclui lixeira: ${includeTrash ? 'Sim' : 'Não'}'),
+            const SizedBox(height: 16),
+            const Text(
+              '⚠️ ATENÇÃO: Esta ação irá:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const Text('• Substituir todos os dados existentes'),
+            const Text('• Limpar a lixeira atual'),
+            if (includeTrash) const Text('• Restaurar itens da lixeira do backup'),
+            const SizedBox(height: 8),
+            const Text('Esta ação não pode ser desfeita!'),
+          ],
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+            ),
+            child: const Text('Importar Mesmo Assim'),
+          ),
+        ],
+      ),
+    ) ?? false;
   }
 }
