@@ -84,25 +84,31 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey[100],
       appBar: AppBar(
+        backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey[100],
+        elevation: 0,
         title: _isSearching
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
+                style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                decoration: InputDecoration(
                   hintText: 'Pesquisar na lixeira...',
-                  hintStyle: TextStyle(color: Colors.white70),
+                  hintStyle: TextStyle(
+                    color: isDark ? Colors.grey[600] : Colors.grey[500],
+                  ),
                   border: InputBorder.none,
                 ),
               )
-            : const Text('Lixeira de Anotações'),
-        backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey[100],
-        elevation: 0,
+            : const Text(
+                'Lixeira de Anotações',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
         actions: [
           IconButton(
             icon: Icon(_isSearching ? Icons.close : Icons.search),
@@ -156,30 +162,39 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
               : Column(
                   children: [
                     // Header com informações
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      color: isDark ? Colors.grey[850] : Colors.grey[100],
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.info_outline,
-                            color: Colors.orange,
-                            size: 20,
+                    if (_deletedNotes.isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.grey[900] : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.grey.withValues(alpha: 0.3),
+                            width: 1,
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Itens na lixeira: ${_filteredNotes.length}. '
-                              'Toque para restaurar ou deslize para excluir permanentemente.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.info_outline,
+                              color: Colors.grey,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Itens na lixeira: ${_filteredNotes.length}. '
+                                'Toque para restaurar ou deslize para excluir permanentemente.',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
                     // Lista de anotações deletadas
                     Expanded(
                       child: ListView.builder(
@@ -204,8 +219,8 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
         children: [
           Icon(
             Icons.note_outlined,
-            size: 80,
-            color: Colors.grey[400],
+            size: 64,
+            color: isDark ? Colors.grey[700] : Colors.grey[400],
           ),
           const SizedBox(height: 16),
           Text(
@@ -213,19 +228,8 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
                 ? 'Nenhuma anotação encontrada na lixeira'
                 : 'Lixeira vazia',
             style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w500,
-              color: isDark ? Colors.grey[400] : Colors.grey[600],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _searchController.text.isNotEmpty
-                ? 'Tente pesquisar com outros termos'
-                : 'Anotações excluídas aparecerão aqui',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[500],
+              fontSize: 16,
+              color: isDark ? Colors.grey[600] : Colors.grey[600],
             ),
           ),
         ],
@@ -249,25 +253,10 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
         padding: const EdgeInsets.only(right: 20),
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         decoration: BoxDecoration(
-          color: Colors.red[700],
+          color: Colors.red,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.delete_forever, color: Colors.white, size: 28),
-            SizedBox(height: 4),
-            Text(
-              'Excluir\nPermanentemente',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+        child: const Icon(Icons.delete_forever, color: Colors.white),
       ),
       confirmDismiss: (direction) async {
         return await _showPermanentDeleteConfirmation(note);
@@ -276,125 +265,115 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
         _deletePermanently(note);
       },
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
         decoration: BoxDecoration(
-          color: isDark ? Colors.grey[850] : Colors.white,
+          color: isDark ? Colors.grey[900] : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: Colors.orange.withValues(alpha: 0.3),
+            color: Colors.grey.withValues(alpha: 0.3),
             width: 1,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.1),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
         ),
         child: ListTile(
-          contentPadding: const EdgeInsets.all(16),
-          leading: Container(
-            width: 4,
-            height: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.orange,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          title: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  note.title,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
-                    color: isDark ? Colors.grey[300] : Colors.grey[700],
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Text(
-                  'LIXEIRA',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.orange,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          subtitle: Column(
+          onTap: () => _showDeletedNoteDetails(note),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      note.title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 15,
+                        color: isDark ? Colors.grey[300] : Colors.grey[700],
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'LIXEIRA',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (note.isPinned) ...[
+                const SizedBox(height: 3),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'FIXADA',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.amber,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
               if (note.content.isNotEmpty) ...[
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
                   note.content,
                   style: TextStyle(
+                    fontSize: 12,
                     color: isDark ? Colors.grey[400] : Colors.grey[600],
                   ),
-                  maxLines: 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
-              const SizedBox(height: 8),
+              const SizedBox(height: 3),
               Row(
                 children: [
                   const Icon(
                     Icons.delete_outline,
-                    size: 14,
+                    size: 12,
                     color: Colors.orange,
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 3),
                   Text(
                     'Excluída $deletedAgo',
                     style: const TextStyle(
-                      fontSize: 12,
+                      fontSize: 11,
                       color: Colors.orange,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const Spacer(),
-                  if (note.isPinned)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Text(
-                        'FIXADA',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.amber,
-                        ),
-                      ),
-                    ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 2),
               Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.schedule,
-                    size: 14,
-                    color: Colors.grey,
+                    size: 12,
+                    color: isDark ? Colors.grey[500] : Colors.grey[700],
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Criada em: ${DateFormat('dd/MM/yyyy HH:mm').format(note.createdAt)}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
+                  const SizedBox(width: 3),
+                  Expanded(
+                    child: Text(
+                      'Criada em: ${DateFormat('dd/MM/yy HH:mm').format(note.createdAt)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark ? Colors.grey[500] : Colors.grey[700],
+                      ),
                     ),
                   ),
                 ],
@@ -405,12 +384,12 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
             icon: const Icon(
               Icons.restore,
               color: Colors.blue,
-              size: 24,
+              size: 20,
             ),
             onPressed: () => _restoreNote(note),
             tooltip: 'Restaurar anotação',
+            padding: const EdgeInsets.all(4),
           ),
-          onTap: () => _showDeletedNoteDetails(note),
         ),
       ),
     );
@@ -434,139 +413,137 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
   void _showDeletedNoteDetails(Note note) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: isDark ? Colors.grey[900] : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
         ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Handle bar
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[400],
-                  borderRadius: BorderRadius.circular(2),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.grey[900] : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      note.title,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'LIXEIRA',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              if (note.content.isNotEmpty) ...[
+                Text(
+                  'Conteúdo',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Badge da lixeira
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Text(
-                'ANOTAÇÃO NA LIXEIRA',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.orange,
+                const SizedBox(height: 8),
+                Text(
+                  note.content,
+                  style: const TextStyle(fontSize: 16),
                 ),
-              ),
-            ),
-            const SizedBox(height: 16),
+                const SizedBox(height: 16),
+              ],
 
-            // Título
-            Text(
-              note.title,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.grey[300] : Colors.grey[700],
-              ),
-            ),
-
-            if (note.content.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text(
-                note.content,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: isDark ? Colors.grey[400] : Colors.grey[600],
-                ),
-              ),
-            ],
-            const SizedBox(height: 16),
-
-            _buildDetailRow(
-              Icons.delete_outline,
-              'Excluída em',
-              note.deletedAt != null 
-                  ? DateFormat('dd/MM/yyyy HH:mm').format(note.deletedAt!)
-                  : 'Data desconhecida',
-              color: Colors.orange,
-            ),
-            const SizedBox(height: 12),
-
-            _buildDetailRow(
-              Icons.schedule,
-              'Criada em',
-              DateFormat('dd/MM/yyyy HH:mm').format(note.createdAt),
-              color: Colors.blue,
-            ),
-
-            if (note.isPinned) ...[
-              const SizedBox(height: 12),
               _buildDetailRow(
-                Icons.push_pin,
-                'Status',
-                'Era uma anotação fixada',
-                color: Colors.amber,
+                Icons.delete_outline,
+                'Excluída em',
+                note.deletedAt != null 
+                    ? DateFormat('dd/MM/yyyy HH:mm').format(note.deletedAt!)
+                    : 'Data desconhecida',
+                color: Colors.orange,
               ),
-            ],
+              const SizedBox(height: 12),
 
-            const SizedBox(height: 24),
+              _buildDetailRow(
+                Icons.access_time,
+                'Criada em',
+                DateFormat('dd/MM/yyyy - HH:mm').format(note.createdAt),
+              ),
 
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _restoreNote(note);
-                    },
-                    icon: const Icon(Icons.restore),
-                    label: const Text('Restaurar'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      Navigator.pop(context);
-                      final confirmed = await _showPermanentDeleteConfirmation(note);
-                      if (confirmed) {
-                        _deletePermanently(note);
-                      }
-                    },
-                    icon: const Icon(Icons.delete_forever),
-                    label: const Text('Excluir Permanentemente'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      side: const BorderSide(color: Colors.red),
-                    ),
-                  ),
+              if (note.isPinned) ...[
+                const SizedBox(height: 12),
+                _buildDetailRow(
+                  Icons.push_pin,
+                  'Status',
+                  'Era uma anotação fixada',
+                  color: Colors.amber,
                 ),
               ],
-            ),
-          ],
+
+              const SizedBox(height: 24),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _restoreNote(note);
+                      },
+                      icon: const Icon(Icons.restore),
+                      label: const Text('Restaurar'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.blue,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        final confirmed = await _showPermanentDeleteConfirmation(note);
+                        if (confirmed) {
+                          _deletePermanently(note);
+                        }
+                      },
+                      icon: const Icon(Icons.delete_forever),
+                      label: const Text('Excluir'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -596,7 +573,7 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: color ?? (isDark ? Colors.grey[300] : Colors.grey[700]),
+              color: color,
             ),
           ),
         ),
@@ -633,30 +610,8 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
     return await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('⚠️ Excluir Permanentemente?'),
-        content: RichText(
-          text: TextSpan(
-            style: const TextStyle(fontSize: 16, color: Colors.black87),
-            children: [
-              const TextSpan(text: 'A anotação '),
-              TextSpan(
-                text: '"${note.title}"',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const TextSpan(
-                text: ' será excluída permanentemente e ',
-              ),
-              const TextSpan(
-                text: 'NÃO PODERÁ SER RECUPERADA',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.red,
-                ),
-              ),
-              const TextSpan(text: '.'),
-            ],
-          ),
-        ),
+        title: const Text('Excluir permanentemente?'),
+        content: Text('Tem certeza que deseja excluir permanentemente "${note.title}"?'),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
@@ -665,13 +620,12 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancelar'),
           ),
-          ElevatedButton(
+          TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+            child: const Text(
+              'Excluir',
+              style: TextStyle(color: Colors.red),
             ),
-            child: const Text('Excluir Permanentemente'),
           ),
         ],
       ),
@@ -709,25 +663,9 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Esvaziar Lixeira?'),
-        content: RichText(
-          text: TextSpan(
-            style: const TextStyle(fontSize: 16, color: Colors.black87),
-            children: [
-              TextSpan(
-                text: 'TODAS as ${_deletedNotes.length} anotações da lixeira',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const TextSpan(text: ' serão '),
-              const TextSpan(
-                text: 'EXCLUÍDAS PERMANENTEMENTE',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.red,
-                ),
-              ),
-              const TextSpan(text: ' e não poderão ser recuperadas.'),
-            ],
-          ),
+        content: Text(
+          'TODAS as ${_deletedNotes.length} anotações da lixeira '
+          'serão EXCLUÍDAS PERMANENTEMENTE e não poderão ser recuperadas.'
         ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
@@ -737,13 +675,12 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancelar'),
           ),
-          ElevatedButton(
+          TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+            child: const Text(
+              'Esvaziar Lixeira',
+              style: TextStyle(color: Colors.red),
             ),
-            child: const Text('Esvaziar Lixeira'),
           ),
         ],
       ),
@@ -780,7 +717,7 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('🧹 Limpar Itens Antigos?'),
+        title: const Text('Limpar Itens Antigos?'),
         content: const Text(
           'Esta ação irá excluir permanentemente todas as anotações que estão na lixeira há mais de 30 dias.\n\n'
           'Esta ação não pode ser desfeita.'
@@ -793,13 +730,12 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancelar'),
           ),
-          ElevatedButton(
+          TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
+            child: const Text(
+              'Limpar Antigos',
+              style: TextStyle(color: Colors.orange),
             ),
-            child: const Text('Limpar Antigos'),
           ),
         ],
       ),

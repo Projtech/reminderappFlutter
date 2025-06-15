@@ -41,26 +41,30 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
     _filterReminders();
   }
 
+  Color _parseColorHex(String hex, String categoryName) {
+    String hexUpper = hex.toUpperCase().replaceAll('#', '');
+    if (hexUpper.length == 6) {
+      hexUpper = 'FF$hexUpper';
+    }
+    if (hexUpper.length != 8) {
+      return Colors.grey;
+    }
+    try {
+      return Color(int.parse(hexUpper, radix: 16));
+    } catch (e) {
+      return Colors.grey;
+    }
+  }
+
   Future<void> _loadCategoryColors() async {
     try {
       final categories = await _categoryHelper.getAllCategories();
       final Map<String, Color> colorMap = {};
 
       for (final cat in categories) {
-        final name = (cat['name'] as String).toLowerCase();
-        final colorHex = cat['color'] as String;
-        
-        try {
-          Color color = Colors.grey;
-          if (colorHex.length == 6) {
-            color = Color(int.parse('FF$colorHex', radix: 16));
-          } else if (colorHex.length == 8) {
-            color = Color(int.parse(colorHex, radix: 16));
-          }
-          colorMap[name] = color;
-        } catch (e) {
-          colorMap[name] = Colors.grey;
-        }
+        final name = (cat['name'] as String).trim().toLowerCase();
+        final colorHex = cat['color'] as String? ?? 'FF808080';
+        colorMap[name] = _parseColorHex(colorHex, name);
       }
 
       if (mounted) {
@@ -84,7 +88,7 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
       final deletedReminders = await _databaseHelper.getDeletedReminders();
       if (mounted) {
         setState(() {
-          _deletedReminders = deletedReminders;
+          _deletedReminders = deletedReminders.map((r) => r.copyWith(category: r.category.trim().toLowerCase())).toList();
           _isLoading = false;
         });
         _filterReminders();
@@ -121,22 +125,31 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     
     return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey[100],
       appBar: AppBar(
+        backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey[100],
+        elevation: 0,
         title: _isSearching
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
+                style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                decoration: InputDecoration(
                   hintText: 'Pesquisar na lixeira...',
-                  hintStyle: TextStyle(color: Colors.white70),
+                  hintStyle: TextStyle(
+                    color: isDark ? Colors.grey[600] : Colors.grey[500],
+                  ),
                   border: InputBorder.none,
                 ),
               )
-            : const Text('Lixeira de Lembretes'),
+            : const Text(
+                'Lixeira de Lembretes',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
         actions: [
           IconButton(
             icon: Icon(_isSearching ? Icons.close : Icons.search),
@@ -190,30 +203,39 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
               : Column(
                   children: [
                     // Header com informações
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      color: isDark ? Colors.grey[850] : Colors.grey[100],
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.info_outline,
-                            color: Colors.orange,
-                            size: 20,
+                    if (_deletedReminders.isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.grey[900] : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.grey.withValues(alpha: 0.3),
+                            width: 1,
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Itens na lixeira: ${_filteredReminders.length}. '
-                              'Toque para restaurar ou deslize para excluir permanentemente.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.info_outline,
+                              color: Colors.orange,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Itens na lixeira: ${_filteredReminders.length}. '
+                                'Toque para restaurar ou deslize para excluir permanentemente.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
                     // Lista de lembretes deletados
                     Expanded(
                       child: ListView.builder(
@@ -238,8 +260,8 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
         children: [
           Icon(
             Icons.delete_outline,
-            size: 80,
-            color: Colors.grey[400],
+            size: 64,
+            color: isDark ? Colors.grey[700] : Colors.grey[400],
           ),
           const SizedBox(height: 16),
           Text(
@@ -247,19 +269,8 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
                 ? 'Nenhum item encontrado na lixeira'
                 : 'Lixeira vazia',
             style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w500,
-              color: isDark ? Colors.grey[400] : Colors.grey[600],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _searchController.text.isNotEmpty
-                ? 'Tente pesquisar com outros termos'
-                : 'Lembretes excluídos aparecerão aqui',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[500],
+              fontSize: 16,
+              color: isDark ? Colors.grey[600] : Colors.grey[600],
             ),
           ),
         ],
@@ -269,7 +280,7 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
 
   Widget _buildDeletedReminderItem(Reminder reminder) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final categoryNormalized = reminder.category.toLowerCase();
+    final categoryNormalized = reminder.category;
     final categoryColor = _categoryColorMap[categoryNormalized] ?? Colors.grey;
     
     // Calcular há quanto tempo foi deletado
@@ -285,25 +296,10 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
         padding: const EdgeInsets.only(right: 20),
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         decoration: BoxDecoration(
-          color: Colors.red[700],
+          color: Colors.red,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.delete_forever, color: Colors.white, size: 28),
-            SizedBox(height: 4),
-            Text(
-              'Excluir\nPermanentemente',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+        child: const Icon(Icons.delete_forever, color: Colors.white),
       ),
       confirmDismiss: (direction) async {
         return await _showPermanentDeleteConfirmation(reminder);
@@ -314,77 +310,68 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         decoration: BoxDecoration(
-          color: isDark ? Colors.grey[850] : Colors.white,
+          color: isDark ? Colors.grey[900] : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: Colors.orange.withValues(alpha: 0.3),
+            color: Colors.grey.withValues(alpha: 0.3),
             width: 1,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.1),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
         ),
         child: ListTile(
-          contentPadding: const EdgeInsets.all(16),
-          leading: Container(
-            width: 4,
-            height: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.orange,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          title: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  reminder.title,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
-                    color: isDark ? Colors.grey[300] : Colors.grey[700],
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Text(
-                  'LIXEIRA',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.orange,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          subtitle: Column(
+          onTap: () => _showDeletedReminderDetails(reminder),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (reminder.description.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(
-                  reminder.description,
-                  style: TextStyle(
-                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-              const SizedBox(height: 8),
               Row(
                 children: [
-                  Icon(
+                  Expanded(
+                    child: Text(
+                      reminder.title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? Colors.grey[300] : Colors.grey[700],
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'LIXEIRA',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (categoryNormalized.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: categoryColor.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    categoryNormalized,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: categoryColor,
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  const Icon(
                     Icons.delete_outline,
                     size: 14,
                     color: Colors.orange,
@@ -398,38 +385,22 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: categoryColor.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      reminder.category,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: categoryColor,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               Row(
                 children: [
                   Icon(
                     Icons.schedule,
                     size: 14,
-                    color: Colors.grey[600],
+                    color: isDark ? Colors.grey[500] : Colors.grey[700],
                   ),
                   const SizedBox(width: 4),
                   Text(
                     'Era para: ${DateFormat('dd/MM/yyyy HH:mm').format(reminder.dateTime)}',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey[600],
+                      color: isDark ? Colors.grey[500] : Colors.grey[700],
                     ),
                   ),
                 ],
@@ -445,7 +416,6 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
             onPressed: () => _restoreReminder(reminder),
             tooltip: 'Restaurar lembrete',
           ),
-          onTap: () => _showDeletedReminderDetails(reminder),
         ),
       ),
     );
@@ -468,140 +438,145 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
 
   void _showDeletedReminderDetails(Reminder reminder) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final categoryNormalized = reminder.category.toLowerCase();
+    final categoryNormalized = reminder.category;
     final categoryColor = _categoryColorMap[categoryNormalized] ?? Colors.grey;
 
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: isDark ? Colors.grey[900] : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
         ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Handle bar
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[400],
-                  borderRadius: BorderRadius.circular(2),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.grey[900] : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      reminder.title,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'LIXEIRA',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              if (reminder.description.isNotEmpty) ...[
+                Text(
+                  'Descrição',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Badge da lixeira
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Text(
-                '🗑️ ITEM NA LIXEIRA',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.orange,
+                const SizedBox(height: 8),
+                Text(
+                  reminder.description,
+                  style: const TextStyle(fontSize: 16),
                 ),
-              ),
-            ),
-            const SizedBox(height: 16),
+                const SizedBox(height: 16),
+              ],
 
-            // Título
-            Text(
-              reminder.title,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.grey[300] : Colors.grey[700],
+              _buildDetailRow(
+                Icons.delete_outline,
+                'Excluído em',
+                reminder.deletedAt != null 
+                    ? DateFormat('dd/MM/yyyy HH:mm').format(reminder.deletedAt!)
+                    : 'Data desconhecida',
+                color: Colors.orange,
               ),
-            ),
-
-            if (reminder.description.isNotEmpty) ...[
               const SizedBox(height: 12),
-              Text(
-                reminder.description,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: isDark ? Colors.grey[400] : Colors.grey[600],
-                ),
+
+              _buildDetailRow(
+                Icons.access_time,
+                'Data e Hora Original',
+                DateFormat('dd/MM/yyyy - HH:mm').format(reminder.dateTime),
+              ),
+              const SizedBox(height: 12),
+
+              _buildDetailRow(
+                Icons.category,
+                'Categoria',
+                categoryNormalized,
+                color: categoryColor,
+              ),
+              const SizedBox(height: 12),
+
+              _buildDetailRow(
+                Icons.access_time,
+                'Criado em',
+                DateFormat('dd/MM/yyyy HH:mm').format(reminder.createdAt),
+              ),
+
+              const SizedBox(height: 24),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _restoreReminder(reminder);
+                      },
+                      icon: const Icon(Icons.restore),
+                      label: const Text('Restaurar'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.blue,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        final confirmed = await _showPermanentDeleteConfirmation(reminder);
+                        if (confirmed) {
+                          _deletePermanently(reminder);
+                        }
+                      },
+                      icon: const Icon(Icons.delete_forever),
+                      label: const Text('Excluir'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
-            const SizedBox(height: 16),
-
-            _buildDetailRow(
-              Icons.delete_outline,
-              'Excluído em',
-              reminder.deletedAt != null 
-                  ? DateFormat('dd/MM/yyyy HH:mm').format(reminder.deletedAt!)
-                  : 'Data desconhecida',
-              color: Colors.orange,
-            ),
-            const SizedBox(height: 12),
-
-            _buildDetailRow(
-              Icons.calendar_today,
-              'Data/Hora Original',
-              DateFormat('dd/MM/yyyy HH:mm').format(reminder.dateTime),
-              color: Colors.blue,
-            ),
-            const SizedBox(height: 12),
-
-            _buildDetailRow(
-              Icons.category,
-              'Categoria',
-              reminder.category,
-              color: categoryColor,
-            ),
-
-            const SizedBox(height: 24),
-
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _restoreReminder(reminder);
-                    },
-                    icon: const Icon(Icons.restore),
-                    label: const Text('Restaurar'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      Navigator.pop(context);
-                      final confirmed = await _showPermanentDeleteConfirmation(reminder);
-                      if (confirmed) {
-                        _deletePermanently(reminder);
-                      }
-                    },
-                    icon: const Icon(Icons.delete_forever),
-                    label: const Text('Excluir Permanentemente'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      side: const BorderSide(color: Colors.red),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -631,12 +606,38 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: color ?? (isDark ? Colors.grey[300] : Colors.grey[700]),
+              color: color,
             ),
           ),
         ),
       ],
     );
+  }
+
+  Future<bool> _showPermanentDeleteConfirmation(Reminder reminder) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Excluir permanentemente?'),
+        content: Text('Tem certeza que deseja excluir permanentemente "${reminder.title}"?'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Excluir',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    ) ?? false;
   }
 
   Future<void> _restoreReminder(Reminder reminder) async {
@@ -673,55 +674,6 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
     }
   }
 
-  Future<bool> _showPermanentDeleteConfirmation(Reminder reminder) async {
-    return await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('⚠️ Excluir Permanentemente?'),
-        content: RichText(
-          text: TextSpan(
-            style: const TextStyle(fontSize: 16, color: Colors.black87),
-            children: [
-              const TextSpan(text: 'O lembrete '),
-              TextSpan(
-                text: '"${reminder.title}"',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const TextSpan(
-                text: ' será excluído permanentemente e ',
-              ),
-              const TextSpan(
-                text: 'NÃO PODERÁ SER RECUPERADO',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.red,
-                ),
-              ),
-              const TextSpan(text: '.'),
-            ],
-          ),
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Excluir Permanentemente'),
-          ),
-        ],
-      ),
-    ) ?? false;
-  }
-
   Future<void> _deletePermanently(Reminder reminder) async {
     try {
       await _databaseHelper.deleteReminderPermanently(reminder.id!);
@@ -752,26 +704,10 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('🗑️ Esvaziar Lixeira?'),
-        content: RichText(
-          text: TextSpan(
-            style: const TextStyle(fontSize: 16, color: Colors.black87),
-            children: [
-              TextSpan(
-                text: 'TODOS os ${_deletedReminders.length} lembretes da lixeira',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const TextSpan(text: ' serão '),
-              const TextSpan(
-                text: 'EXCLUÍDOS PERMANENTEMENTE',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.red,
-                ),
-              ),
-              const TextSpan(text: ' e não poderão ser recuperados.'),
-            ],
-          ),
+        title: const Text('Esvaziar Lixeira?'),
+        content: Text(
+          'TODOS os ${_deletedReminders.length} lembretes da lixeira '
+          'serão EXCLUÍDOS PERMANENTEMENTE e não poderão ser recuperados.'
         ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
@@ -781,13 +717,12 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancelar'),
           ),
-          ElevatedButton(
+          TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+            child: const Text(
+              'Esvaziar Lixeira',
+              style: TextStyle(color: Colors.red),
             ),
-            child: const Text('Esvaziar Lixeira'),
           ),
         ],
       ),
@@ -824,7 +759,7 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('🧹 Limpar Itens Antigos?'),
+        title: const Text('Limpar Itens Antigos?'),
         content: const Text(
           'Esta ação irá excluir permanentemente todos os lembretes que estão na lixeira há mais de 30 dias.\n\n'
           'Esta ação não pode ser desfeita.'
@@ -837,13 +772,12 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancelar'),
           ),
-          ElevatedButton(
+          TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
+            child: const Text(
+              'Limpar Antigos',
+              style: TextStyle(color: Colors.orange),
             ),
-            child: const Text('Limpar Antigos'),
           ),
         ],
       ),

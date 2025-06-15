@@ -519,30 +519,13 @@ Widget _buildFilterChip(String label, String? value) {
           
           const Divider(),
           
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(
-              'NOTIFICAÇÕES',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
-              ),
-            ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           ),
-          
-          ListTile(
-            leading: const Icon(Icons.notifications_active),
-            title: const Text('Autorizar Notificações'),
-            onTap: () {
-              Navigator.pop(context);
-              NotificationService.openSettingsAndRequestPermissions();
-            },
-          ),
-          
+                    
           ListTile(
             leading: const Icon(Icons.battery_saver),
-            title: const Text('🔋 Desativar otimização de bateria'),
+            title: const Text('Desativar otimização de bateria'),
             subtitle: const Text('Desabilitar otimização de bateria'),
             onTap: () async {
               Navigator.pop(context);

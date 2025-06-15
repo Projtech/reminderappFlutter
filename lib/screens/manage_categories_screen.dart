@@ -1,3 +1,5 @@
+// ignore_for_file: empty_catches, use_build_context_synchronously, deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart'; // Importar color picker
 import '../database/category_helper.dart';
