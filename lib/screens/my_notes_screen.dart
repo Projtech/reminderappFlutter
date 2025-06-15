@@ -237,14 +237,14 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: note.isPinned
-                ? Colors.amber.withOpacity(0.5)
+                ? Colors.amber.withValues(alpha: 0.5)
                 : Colors.transparent,
             width: 1,
           ),
           boxShadow: note.isPinned
               ? [
                   BoxShadow(
-                    color: Colors.amber.withOpacity(0.2),
+                    color: Colors.amber.withValues(alpha: 0.2),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),

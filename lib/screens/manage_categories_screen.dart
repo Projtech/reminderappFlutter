@@ -270,7 +270,7 @@ class _ManageCategoriesScreenState extends State<ManageCategoriesScreen> {
                           decoration: BoxDecoration(
                             color: color,
                             shape: BoxShape.circle,
-                            border: Border.all(color: theme.dividerColor.withAlpha((0.5 * 255).round()), width: 1), // Corrigido de withOpacity
+                            border: Border.all(color: theme.dividerColor.withAlpha((0.5 * 255).round()), width: 1),
                           ),
                         ),
                         title: Text(categoryName, style: TextStyle(color: colorScheme.onSurface)),
@@ -282,7 +282,7 @@ class _ManageCategoriesScreenState extends State<ManageCategoriesScreen> {
                               )
                             : Tooltip( // Adiciona tooltip para 'Geral'
                                 message: 'Categoria padrão não pode ser excluída',
-                                child: Icon(Icons.lock_outline, color: colorScheme.onSurfaceVariant.withAlpha((0.5 * 255).round())), // Corrigido de withOpacity
+                                child: Icon(Icons.lock_outline, color: colorScheme.onSurfaceVariant.withAlpha((0.5 * 255).round())),
                               ),
                       ),
                     );

@@ -100,7 +100,7 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
                   border: InputBorder.none,
                 ),
               )
-            : const Text('🗑️ Lixeira de Anotações'),
+            : const Text('Lixeira de Anotações'),
         backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey[100],
         elevation: 0,
         actions: [
@@ -281,12 +281,12 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
           color: isDark ? Colors.grey[850] : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: Colors.orange.withOpacity(0.3),
+            color: Colors.orange.withValues(alpha: 0.3),
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.3 : 0.1),
+              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.1),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),
@@ -317,7 +317,7 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.2),
+                  color: Colors.orange.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Text(
@@ -367,7 +367,7 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: Colors.amber.withOpacity(0.2),
+                        color: Colors.amber.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Text(
@@ -465,11 +465,11 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.2),
+                color: Colors.orange.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: const Text(
-                '🗑️ ANOTAÇÃO NA LIXEIRA',
+                'ANOTAÇÃO NA LIXEIRA',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -708,7 +708,7 @@ class _NotesTrashScreenState extends State<NotesTrashScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('🗑️ Esvaziar Lixeira?'),
+        title: const Text('Esvaziar Lixeira?'),
         content: RichText(
           text: TextSpan(
             style: const TextStyle(fontSize: 16, color: Colors.black87),

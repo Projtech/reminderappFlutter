@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart'; // ✅ NOVO IMPORT
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
@@ -8,12 +8,10 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('pt_BR', null);
 
-  // 🚀 OTIMIZAÇÃO: Só carregar tema (rápido) antes do runApp()
   final prefs = await SharedPreferences.getInstance();
   final String? themeModeString = prefs.getString('theme_mode');
   ThemeMode initialThemeMode = (themeModeString == 'dark') ? ThemeMode.dark : ThemeMode.light;
 
-  // 🚀 EXECUTAR APP IMEDIATAMENTE - Operações pesadas movidas para HomeScreen
   runApp(MyApp(initialThemeMode: initialThemeMode));
 }
 
@@ -22,13 +20,16 @@ class MyApp extends StatefulWidget {
   const MyApp({super.key, required this.initialThemeMode});
 
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-  static _MyAppState? of(BuildContext context) => context.findAncestorStateOfType<_MyAppState>();
+  
+  // ✅ CORREÇÃO 1: Tornar classe pública e método público
+  static MyAppState? of(BuildContext context) => context.findAncestorStateOfType<MyAppState>();
 
   @override
-  State<MyApp> createState() => _MyAppState();
+  State<MyApp> createState() => MyAppState(); // ✅ Retornar classe pública
 }
 
-class _MyAppState extends State<MyApp> {
+// ✅ CORREÇÃO 1: Remover underscore para tornar público
+class MyAppState extends State<MyApp> {
   late ThemeMode _themeMode;
 
   @override
@@ -99,7 +100,8 @@ class _MyAppState extends State<MyApp> {
         }),
         trackColor: WidgetStateProperty.resolveWith<Color?>((Set<WidgetState> states) {
           if (states.contains(WidgetState.selected)) {
-            return Colors.blue[300]?.withAlpha(128);
+            // ✅ CORREÇÃO 2: Usar withValues em vez de withAlpha
+            return Colors.blue[300]?.withValues(alpha: 0.5); // 128/255 ≈ 0.5
           }
           return null;
         }),
@@ -118,16 +120,15 @@ class _MyAppState extends State<MyApp> {
       navigatorKey: MyApp.navigatorKey,
       debugShowCheckedModeBanner: false,
       
-      // ✅ CONFIGURAÇÃO DE LOCALIZAÇÃO EM PORTUGUÊS BRASILEIRO
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: const [
-        Locale('pt', 'BR'), // Português brasileiro
+        Locale('pt', 'BR'),
       ],
-      locale: const Locale('pt', 'BR'), // ✅ FORÇA PORTUGUÊS BRASILEIRO
+      locale: const Locale('pt', 'BR'),
       
       theme: lightTheme,
       darkTheme: darkTheme,

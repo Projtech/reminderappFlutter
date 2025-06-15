@@ -136,7 +136,7 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
                   border: InputBorder.none,
                 ),
               )
-            : const Text('🗑️ Lixeira de Lembretes'),
+            : const Text('Lixeira de Lembretes'),
         actions: [
           IconButton(
             icon: Icon(_isSearching ? Icons.close : Icons.search),
@@ -317,12 +317,12 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
           color: isDark ? Colors.grey[850] : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: Colors.orange.withOpacity(0.3),
+            color: Colors.orange.withValues(alpha: 0.3),
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.3 : 0.1),
+              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.1),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),
@@ -353,7 +353,7 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.2),
+                  color: Colors.orange.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Text(
@@ -402,7 +402,7 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: categoryColor.withOpacity(0.2),
+                      color: categoryColor.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -502,7 +502,7 @@ class _RemindersTrashScreenState extends State<RemindersTrashScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.2),
+                color: Colors.orange.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: const Text(

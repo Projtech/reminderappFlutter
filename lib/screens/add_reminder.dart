@@ -195,7 +195,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
               decoration: BoxDecoration(
                 border: Border(
                   bottom: BorderSide(
-                    color: Colors.grey.withOpacity(0.3),
+                    color: Colors.grey.withValues(alpha: 0.3),
                     width: 0.5,
                   ),
                 ),
@@ -271,7 +271,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
               decoration: BoxDecoration(
                 border: Border(
                   bottom: BorderSide(
-                    color: Colors.grey.withOpacity(0.3),
+                    color: Colors.grey.withValues(alpha: 0.3),
                     width: 0.5,
                   ),
                 ),
@@ -343,7 +343,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     setState(() => _isCreatingCategory = true);
 
     try {
-      final colorHex = _selectedNewCategoryColor.value
+      final colorHex = _selectedNewCategoryColor.toARGB32()
           .toRadixString(16)
           .padLeft(8, '0')
           .substring(2);
@@ -559,7 +559,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: theme.shadowColor.withOpacity(0.1),
+            color: theme.shadowColor.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -727,7 +727,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: theme.shadowColor.withOpacity(0.1),
+            color: theme.shadowColor.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -769,7 +769,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: theme.shadowColor.withOpacity(0.1),
+            color: theme.shadowColor.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -873,7 +873,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: theme.shadowColor.withOpacity(0.1),
+            color: theme.shadowColor.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -928,7 +928,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
          BoxShadow(
-           color: theme.shadowColor.withOpacity(0.1),
+           color: theme.shadowColor.withValues(alpha: 0.1),
            blurRadius: 8,
            offset: const Offset(0, 2),
          ),
@@ -995,79 +995,88 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
    );
  }
 
- void _showAddCategoryDialog() {
-   showDialog(
-     context: context,
-     builder: (context) => AlertDialog(
-       title: const Text('Nova Categoria'),
-       content: Column(
-         mainAxisSize: MainAxisSize.min,
-         children: [
-           TextFormField(
-             controller: _newCategoryController,
-             decoration: const InputDecoration(
-               labelText: 'Nome da categoria',
-               border: OutlineInputBorder(),
-             ),
-             maxLength: 50,
-           ),
-           const SizedBox(height: 16),
-           const Text('Escolha uma cor:'),
-           const SizedBox(height: 8),
-           Wrap(
-             spacing: 8,
-             runSpacing: 8,
-             children: _predefinedColors.map((color) {
-               final isSelected = _selectedNewCategoryColor == color;
-               return GestureDetector(
-                 onTap: () {
-                   setState(() {
-                     _selectedNewCategoryColor = color;
-                   });
-                 },
-                 child: Container(
-                   width: 32,
-                   height: 32,
-                   decoration: BoxDecoration(
-                     color: color,
-                     shape: BoxShape.circle,
-                     border: Border.all(
-                       color: isSelected ? Colors.black : Colors.transparent,
-                       width: 2,
-                     ),
-                   ),
-                   child: isSelected
-                       ? const Icon(
-                           Icons.check,
-                           color: Colors.white,
-                           size: 16,
-                         )
-                       : null,
-                 ),
-               );
-             }).toList(),
-           ),
-         ],
-       ),
-       actions: [
-         TextButton(
-           onPressed: () => Navigator.pop(context),
-           child: const Text('Cancelar'),
-         ),
-         ElevatedButton(
-           onPressed: _isCreatingCategory ? null : _addNewCategory,
-           child: _isCreatingCategory
-               ? const SizedBox(
-                   width: 20,
-                   height: 20,
-                   child: CircularProgressIndicator(strokeWidth: 2),
-                 )
-               : const Text('Adicionar'),
-         ),
-       ],
-     ),
-   );
- }
+void _showAddCategoryDialog() {
+  Color tempSelectedColor = _selectedNewCategoryColor; // Variável temporária para o dialog
+  
+  showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder( // Adicionar StatefulBuilder
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text('Nova Categoria'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _newCategoryController,
+              decoration: const InputDecoration(
+                labelText: 'Nome da categoria',
+                border: OutlineInputBorder(),
+              ),
+              maxLength: 50,
+            ),
+            const SizedBox(height: 16),
+            const Text('Escolha uma cor:'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _predefinedColors.map((color) {
+                final isSelected = tempSelectedColor == color;
+                return GestureDetector(
+                  onTap: () {
+                    setDialogState(() { // Usar setDialogState em vez de setState
+                      tempSelectedColor = color;
+                    });
+                  },
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isSelected ? Colors.black : Colors.transparent,
+                        width: 2,
+                      ),
+                    ),
+                    child: isSelected
+                        ? const Icon(
+                            Icons.check,
+                            color: Colors.white,
+                            size: 16,
+                          )
+                        : null,
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: _isCreatingCategory ? null : () {
+              setState(() {
+                _selectedNewCategoryColor = tempSelectedColor; // Atualizar a cor no widget pai
+              });
+              _addNewCategory();
+            },
+            child: _isCreatingCategory
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Adicionar'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
 
  @override
  void dispose() {
