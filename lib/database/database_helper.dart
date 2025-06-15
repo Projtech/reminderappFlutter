@@ -19,7 +19,7 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'reminders.db');
     return await openDatabase(
       path,
-      version: 6, // ✅ VERSÃO 6 para lixeira
+      version: 6, // ✅ MANTÉM VERSÃO 6
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -45,25 +45,45 @@ class DatabaseHelper {
     ''');
   }
 
+  // ✅ CORRIGIDO: Verifica se coluna existe antes de adicionar
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
-      await db.execute('ALTER TABLE reminders ADD COLUMN isRecurring INTEGER NOT NULL DEFAULT 0');
-      await db.execute('ALTER TABLE reminders ADD COLUMN recurringType TEXT');
+      await _addColumnIfNotExists(db, 'reminders', 'isRecurring', 'INTEGER NOT NULL DEFAULT 0');
+      await _addColumnIfNotExists(db, 'reminders', 'recurringType', 'TEXT');
     }
     if (oldVersion < 3) {
-      await db.execute('ALTER TABLE reminders ADD COLUMN notificationsEnabled INTEGER NOT NULL DEFAULT 1');
+      await _addColumnIfNotExists(db, 'reminders', 'notificationsEnabled', 'INTEGER NOT NULL DEFAULT 1');
     }
     if (oldVersion < 4) {
-      await db.execute('ALTER TABLE reminders ADD COLUMN recurrenceInterval INTEGER NOT NULL DEFAULT 1');
+      await _addColumnIfNotExists(db, 'reminders', 'recurrenceInterval', 'INTEGER NOT NULL DEFAULT 1');
     }
     if (oldVersion < 5) {
       final now = DateTime.now().millisecondsSinceEpoch;
-      await db.execute('ALTER TABLE reminders ADD COLUMN createdAt INTEGER NOT NULL DEFAULT $now');
+      await _addColumnIfNotExists(db, 'reminders', 'createdAt', 'INTEGER NOT NULL DEFAULT $now');
     }
     if (oldVersion < 6) {
-      // ✅ MIGRAÇÃO V6: Adicionar campos da lixeira
-      await db.execute('ALTER TABLE reminders ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0');
-      await db.execute('ALTER TABLE reminders ADD COLUMN deletedAt INTEGER');
+      // ✅ CORRIGIDO: Verifica antes de adicionar colunas da lixeira
+      await _addColumnIfNotExists(db, 'reminders', 'deleted', 'INTEGER NOT NULL DEFAULT 0');
+      await _addColumnIfNotExists(db, 'reminders', 'deletedAt', 'INTEGER');
+    }
+  }
+
+  // ✅ NOVO: Função auxiliar para verificar e adicionar coluna se não existir
+  Future<void> _addColumnIfNotExists(Database db, String tableName, String columnName, String columnDefinition) async {
+    try {
+      // Verifica se a coluna já existe
+      final result = await db.rawQuery("PRAGMA table_info($tableName)");
+      final columnExists = result.any((column) => column['name'] == columnName);
+      
+      if (!columnExists) {
+        await db.execute('ALTER TABLE $tableName ADD COLUMN $columnName $columnDefinition');
+        print('✅ Coluna $columnName adicionada à tabela $tableName');
+      } else {
+        print('ℹ️ Coluna $columnName já existe na tabela $tableName');
+      }
+    } catch (e) {
+      print('❌ Erro ao verificar/adicionar coluna $columnName: $e');
+      // Não relança o erro para evitar crash - continua a execução
     }
   }
 
