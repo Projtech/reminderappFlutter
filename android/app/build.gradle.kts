@@ -49,6 +49,8 @@ dependencies {
     // Adicionada dependência explícita do Play Core KTX
     implementation("com.google.android.play:core-ktx:1.8.1")
     
-    // Adicione outras dependências aqui
+    // Kotlin e Corrotinas
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.22")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 }
-

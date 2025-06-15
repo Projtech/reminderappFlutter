@@ -1,331 +1,388 @@
+// lib/screens/add_reminder.dart - PARTE 1
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:intl/intl.dart';
 import '../database/category_helper.dart';
 import '../database/database_helper.dart';
 import '../models/reminder.dart';
+import '../models/checklist_item.dart';
 import '../services/notification_service.dart';
 import 'dart:async';
 
 class AddReminderScreen extends StatefulWidget {
-  final Reminder? reminderToEdit;
+ final Reminder? reminderToEdit;
 
-  const AddReminderScreen({super.key, this.reminderToEdit});
+ const AddReminderScreen({super.key, this.reminderToEdit});
 
-  @override
-  State<AddReminderScreen> createState() => _AddReminderScreenState();
+ @override
+ State<AddReminderScreen> createState() => _AddReminderScreenState();
 }
 
 class _AddReminderScreenState extends State<AddReminderScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _newCategoryController = TextEditingController();
-  final _customIntervalController = TextEditingController();
+ final _formKey = GlobalKey<FormState>();
+ final _titleController = TextEditingController();
+ final _descriptionController = TextEditingController();
+ final _newCategoryController = TextEditingController();
+ final _customIntervalController = TextEditingController();
+ final _newItemController = TextEditingController();
 
-  late DateTime _selectedDateTime;
-  late String _selectedCategory;
-  late String _selectedRecurrenceType;
-  late int _customInterval;
-  late String _customUnit;
-  
-  bool _isEditing = false;
-  bool _isLoadingCategories = true;
-  bool _isCreatingCategory = false;
-  bool _isSaving = false;
+ late DateTime _selectedDateTime;
+ late String _selectedCategory;
+ late String _selectedRecurrenceType;
+ late int _customInterval;
+ late String _customUnit;
+ 
+ bool _isEditing = false;
+ bool _isLoadingCategories = true;
+ bool _isCreatingCategory = false;
+ bool _isSaving = false;
+ bool _isChecklist = false;
+ bool _isAddingItem = false;
 
-  Map<String, Map<String, dynamic>> _categoriesMap = {};
-  List<String> _normalizedCategoryNames = [];
+ Map<String, Map<String, dynamic>> _categoriesMap = {};
+ List<String> _normalizedCategoryNames = [];
+ List<ChecklistItem> _checklistItems = [];
 
-  final DatabaseHelper _databaseHelper = DatabaseHelper();
-  final CategoryHelper _categoryHelper = CategoryHelper();
-  Color _selectedNewCategoryColor = Colors.grey;
+ final DatabaseHelper _databaseHelper = DatabaseHelper();
+ final CategoryHelper _categoryHelper = CategoryHelper();
+ Color _selectedNewCategoryColor = Colors.grey;
 
-  final List<Color> _predefinedColors = [
-    Colors.red, Colors.pink, Colors.purple, Colors.deepPurple,
-    Colors.indigo, Colors.blue, Colors.lightBlue, Colors.cyan,
-    Colors.teal, Colors.green, Colors.lightGreen, Colors.lime,
-    Colors.yellow, Colors.amber, Colors.orange, Colors.deepOrange,
-    Colors.brown, Colors.grey, Colors.blueGrey
-  ];
+ final List<Color> _predefinedColors = [
+   Colors.red, Colors.pink, Colors.purple, Colors.deepPurple,
+   Colors.indigo, Colors.blue, Colors.lightBlue, Colors.cyan,
+   Colors.teal, Colors.green, Colors.lightGreen, Colors.lime,
+   Colors.yellow, Colors.amber, Colors.orange, Colors.deepOrange,
+   Colors.brown, Colors.grey, Colors.blueGrey
+ ];
 
-  final List<Map<String, String>> _recurrenceOptions = [
-    {'value': 'none', 'label': 'Não repetir'},
-    {'value': 'daily', 'label': 'Diariamente'},
-    {'value': 'weekly', 'label': 'Semanalmente'},
-    {'value': 'monthly', 'label': 'Mensalmente'},
-    {'value': 'custom', 'label': 'Personalizado'},
-  ];
+ final List<Map<String, String>> _recurrenceOptions = [
+   {'value': 'none', 'label': 'Não repetir'},
+   {'value': 'daily', 'label': 'Diariamente'},
+   {'value': 'weekly', 'label': 'Semanalmente'},
+   {'value': 'monthly', 'label': 'Mensalmente'},
+   {'value': 'custom', 'label': 'Personalizado'},
+ ];
 
-  final List<Map<String, String>> _customUnits = [
-    {'value': 'days', 'label': 'dias'},
-    {'value': 'weeks', 'label': 'semanas'},
-    {'value': 'months', 'label': 'meses'},
-  ];
+ final List<Map<String, String>> _customUnits = [
+   {'value': 'days', 'label': 'dias'},
+   {'value': 'weeks', 'label': 'semanas'},
+   {'value': 'months', 'label': 'meses'},
+ ];
 
-  @override
-  void initState() {
-    super.initState();
-    _isEditing = widget.reminderToEdit != null;
+ @override
+ void initState() {
+   super.initState();
+   _isEditing = widget.reminderToEdit != null;
 
-    if (_isEditing) {
-      final reminder = widget.reminderToEdit!;
-      _titleController.text = reminder.title;
-      _descriptionController.text = reminder.description;
-      _selectedDateTime = reminder.dateTime;
-      _selectedCategory = reminder.category.toLowerCase();
+   if (_isEditing) {
+     final reminder = widget.reminderToEdit!;
+     _titleController.text = reminder.title;
+     _descriptionController.text = reminder.description;
+     _selectedDateTime = reminder.dateTime;
+     _selectedCategory = reminder.category.toLowerCase();
 
-      _selectedRecurrenceType = reminder.recurringType ?? 'none';
-      _customInterval = reminder.recurrenceInterval;
-      _customIntervalController.text = _customInterval.toString();
+     _selectedRecurrenceType = reminder.recurringType ?? 'none';
+     _customInterval = reminder.recurrenceInterval;
+     _customIntervalController.text = _customInterval.toString();
 
-      if (_selectedRecurrenceType.startsWith('custom_')) {
-        if (_selectedRecurrenceType == 'custom_daily') {
-          _customUnit = 'days';
-        } else if (_selectedRecurrenceType == 'custom_weekly') {
-          _customUnit = 'weeks';
-        } else if (_selectedRecurrenceType == 'custom_monthly') {
-          _customUnit = 'months';
-        } else {
-          _customUnit = 'days';
-        }
-        _selectedRecurrenceType = 'custom';
-      } else {
-        _customUnit = 'days';
-      }
-    } else {
-      _selectedDateTime = DateTime.now();
-      _selectedCategory = '';
-      _selectedRecurrenceType = 'none';
-      _customInterval = 1;
-      _customUnit = 'days';
-      _customIntervalController.text = '1';
-    }
+     _isChecklist = reminder.isChecklist;
+     _checklistItems = List.from(reminder.checklistItems ?? []);
 
-    _loadCategories();
-  }
+     if (_selectedRecurrenceType.startsWith('custom_')) {
+       if (_selectedRecurrenceType == 'custom_daily') {
+         _customUnit = 'days';
+       } else if (_selectedRecurrenceType == 'custom_weekly') {
+         _customUnit = 'weeks';
+       } else if (_selectedRecurrenceType == 'custom_monthly') {
+         _customUnit = 'months';
+       } else {
+         _customUnit = 'days';
+       }
+       _selectedRecurrenceType = 'custom';
+     } else {
+       _customUnit = 'days';
+     }
+   } else {
+     _selectedDateTime = DateTime.now();
+     _selectedCategory = '';
+     _selectedRecurrenceType = 'none';
+     _customInterval = 1;
+     _customUnit = 'days';
+     _customIntervalController.text = '1';
+   }
 
-  Future<void> _loadCategories() async {
-    try {
-      final categories = await _categoryHelper.getAllCategories();
-      final Map<String, Map<String, dynamic>> tempCategoriesMap = {};
-      final List<String> tempNormalizedNames = [];
+   _loadCategories();
+ }
 
-      for (final catMap in categories) {
-        final originalName = catMap['name'] as String? ?? '';
-        final normalizedName = originalName.trim().toLowerCase();
-        if (normalizedName.isEmpty) continue;
+ Future<void> _loadCategories() async {
+   try {
+     final categories = await _categoryHelper.getAllCategories();
+     final Map<String, Map<String, dynamic>> tempCategoriesMap = {};
+     final List<String> tempNormalizedNames = [];
 
-        final colorHex = catMap['color'] as String? ?? 'FF808080';
-        final color = _parseColorHex(colorHex, normalizedName);
+     for (final catMap in categories) {
+       final originalName = catMap['name'] as String? ?? '';
+       final normalizedName = originalName.trim().toLowerCase();
+       if (normalizedName.isEmpty) continue;
 
-        tempCategoriesMap[normalizedName] = {
-          'originalName': originalName,
-          'colorHex': colorHex,
-          'color': color,
-        };
-        tempNormalizedNames.add(normalizedName);
-      }
+       final colorHex = catMap['color'] as String? ?? 'FF808080';
+       final color = _parseColorHex(colorHex, normalizedName);
 
-      tempNormalizedNames.sort();
+       tempCategoriesMap[normalizedName] = {
+         'originalName': originalName,
+         'colorHex': colorHex,
+         'color': color,
+       };
+       tempNormalizedNames.add(normalizedName);
+     }
 
-      setState(() {
-        _categoriesMap = tempCategoriesMap;
-        _normalizedCategoryNames = tempNormalizedNames;
+     tempNormalizedNames.sort();
 
-        if (_normalizedCategoryNames.isNotEmpty) {
-          if (!_normalizedCategoryNames.contains(_selectedCategory) || _selectedCategory.isEmpty) {
-            _selectedCategory = _normalizedCategoryNames.first;
-          }
-        } else {
-          _selectedCategory = '';
-        }
-        _isLoadingCategories = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoadingCategories = false);
-      _showMessage('Erro ao carregar categorias', Colors.red);
-    }
-  }
+     setState(() {
+       _categoriesMap = tempCategoriesMap;
+       _normalizedCategoryNames = tempNormalizedNames;
 
-  Color _parseColorHex(String colorHex, String normalizedName) {
-    try {
-      if (colorHex.length == 6) {
-        return Color(int.parse('FF$colorHex', radix: 16));
-      } else if (colorHex.length == 8) {
-        return Color(int.parse(colorHex, radix: 16));
-      }
-    } catch (e) {
-      // Ignore error and use default
-    }
+       if (_normalizedCategoryNames.isNotEmpty) {
+         if (!_normalizedCategoryNames.contains(_selectedCategory) || _selectedCategory.isEmpty) {
+           _selectedCategory = _normalizedCategoryNames.first;
+         }
+       } else {
+         _selectedCategory = '';
+       }
+       _isLoadingCategories = false;
+     });
+   } catch (e) {
+     if (!mounted) return;
+     setState(() => _isLoadingCategories = false);
+     _showMessage('Erro ao carregar categorias', Colors.red);
+   }
+ }
 
-    switch (normalizedName) {
-      case 'trabalho':
-        return Colors.blue;
-      case 'pessoal':
-        return Colors.green;
-      case 'saúde':
-        return Colors.red;
-      case 'estudo':
-        return Colors.orange;
-      case 'casa':
-        return Colors.brown;
-      default:
-        return Colors.grey;
-    }
-  }
+ Color _parseColorHex(String colorHex, String normalizedName) {
+   try {
+     if (colorHex.length == 6) {
+       return Color(int.parse('FF$colorHex', radix: 16));
+     } else if (colorHex.length == 8) {
+       return Color(int.parse(colorHex, radix: 16));
+     }
+   } catch (e) {
+     // Ignore error and use default
+   }
 
-  Future<void> _selectDate() async {
-    DateTime tempDate = _selectedDateTime;
-    
-    await showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: 300,
-        decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: Colors.grey.withValues(alpha: 0.3),
-                    width: 0.5,
-                  ),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text(
-                      'Cancelar',
-                      style: TextStyle(color: Colors.grey, fontSize: 16),
-                    ),
-                  ),
-                  const Text(
-                    'Selecionar Data',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _selectedDateTime = DateTime(
-                          tempDate.year,
-                          tempDate.month,
-                          tempDate.day,
-                          _selectedDateTime.hour,
-                          _selectedDateTime.minute,
-                        );
-                      });
-                      Navigator.pop(context);
-                    },
-                    child: const Text(
-                      'Confirmar',
-                      style: TextStyle(color: Colors.blue, fontSize: 16, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: CupertinoDatePicker(
-                mode: CupertinoDatePickerMode.date,
-                initialDateTime: _selectedDateTime,
-                minimumDate: DateTime.now().subtract(const Duration(days: 365)),
-                maximumDate: DateTime.now().add(const Duration(days: 365 * 5)),
-                onDateTimeChanged: (DateTime newDate) {
-                  tempDate = newDate;
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+   switch (normalizedName) {
+     case 'trabalho':
+       return Colors.blue;
+     case 'pessoal':
+       return Colors.green;
+     case 'saúde':
+       return Colors.red;
+     case 'estudo':
+       return Colors.orange;
+     case 'casa':
+       return Colors.brown;
+     default:
+       return Colors.grey;
+   }
+ }
 
-  Future<void> _selectTime() async {
-    DateTime tempTime = _selectedDateTime;
-    
-    await showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: 300,
-        decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: Colors.grey.withValues(alpha: 0.3),
-                    width: 0.5,
-                  ),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text(
-                      'Cancelar',
-                      style: TextStyle(color: Colors.grey, fontSize: 16),
-                    ),
-                  ),
-                  const Text(
-                    'Selecionar Hora',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _selectedDateTime = DateTime(
-                          _selectedDateTime.year,
-                          _selectedDateTime.month,
-                          _selectedDateTime.day,
-                          tempTime.hour,
-                          tempTime.minute,
-                        );
-                      });
-                      Navigator.pop(context);
-                    },
-                    child: const Text(
-                      'Confirmar',
-                      style: TextStyle(color: Colors.blue, fontSize: 16, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: CupertinoDatePicker(
-                mode: CupertinoDatePickerMode.time,
-                initialDateTime: _selectedDateTime,
-                use24hFormat: true,
-                onDateTimeChanged: (DateTime newTime) {
-                  tempTime = newTime;
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+ void _addChecklistItem() {
+   final text = _newItemController.text.trim();
+   if (text.isNotEmpty) {
+     setState(() {
+       _checklistItems.add(ChecklistItem(
+         text: text,
+         order: _checklistItems.length,
+       ));
+       _newItemController.clear();
+       _isAddingItem = false;
+     });
+   }
+ }
+
+ void _removeChecklistItem(int index) {
+   setState(() {
+     _checklistItems.removeAt(index);
+     // Reordenar os items
+     for (int i = 0; i < _checklistItems.length; i++) {
+       _checklistItems[i] = _checklistItems[i].copyWith(order: i);
+     }
+   });
+ }
+
+ void _toggleChecklistItem(int index) {
+   setState(() {
+     _checklistItems[index] = _checklistItems[index].copyWith(
+       isCompleted: !_checklistItems[index].isCompleted,
+     );
+   });
+ }
+
+ void _reorderChecklistItems(int oldIndex, int newIndex) {
+   setState(() {
+     if (newIndex > oldIndex) {
+       newIndex -= 1;
+     }
+     final item = _checklistItems.removeAt(oldIndex);
+     _checklistItems.insert(newIndex, item);
+     
+     // Reordenar os items
+     for (int i = 0; i < _checklistItems.length; i++) {
+       _checklistItems[i] = _checklistItems[i].copyWith(order: i);
+     }
+   });
+ }
+
+ Future<void> _selectDate() async {
+   DateTime tempDate = _selectedDateTime;
+   
+   await showModalBottomSheet(
+     context: context,
+     backgroundColor: Colors.transparent,
+     builder: (context) => Container(
+       height: 300,
+       decoration: BoxDecoration(
+         color: Theme.of(context).scaffoldBackgroundColor,
+         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+       ),
+       child: Column(
+         children: [
+           Container(
+             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+             decoration: BoxDecoration(
+               border: Border(
+                 bottom: BorderSide(
+                   color: Colors.grey.withValues(alpha: 0.3),
+                   width: 0.5,
+                 ),
+               ),
+             ),
+             child: Row(
+               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+               children: [
+                 TextButton(
+                   onPressed: () => Navigator.pop(context),
+                   child: const Text(
+                     'Cancelar',
+                     style: TextStyle(color: Colors.grey, fontSize: 16),
+                   ),
+                 ),
+                 const Text(
+                   'Selecionar Data',
+                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                 ),
+                 TextButton(
+                   onPressed: () {
+                     setState(() {
+                       _selectedDateTime = DateTime(
+                         tempDate.year,
+                         tempDate.month,
+                         tempDate.day,
+                         _selectedDateTime.hour,
+                         _selectedDateTime.minute,
+                       );
+                     });
+                     Navigator.pop(context);
+                   },
+                   child: const Text(
+                     'Confirmar',
+                     style: TextStyle(color: Colors.blue, fontSize: 16, fontWeight: FontWeight.w600),
+                   ),
+                 ),
+               ],
+             ),
+           ),
+           Expanded(
+             child: CupertinoDatePicker(
+               mode: CupertinoDatePickerMode.date,
+               initialDateTime: _selectedDateTime,
+               minimumDate: DateTime.now().subtract(const Duration(days: 365)),
+               maximumDate: DateTime.now().add(const Duration(days: 365 * 5)),
+               onDateTimeChanged: (DateTime newDate) {
+                 tempDate = newDate;
+               },
+             ),
+           ),
+         ],
+       ),
+     ),
+   );
+ }
+
+ Future<void> _selectTime() async {
+   DateTime tempTime = _selectedDateTime;
+   
+   await showModalBottomSheet(
+     context: context,
+     backgroundColor: Colors.transparent,
+     builder: (context) => Container(
+       height: 300,
+       decoration: BoxDecoration(
+         color: Theme.of(context).scaffoldBackgroundColor,
+         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+       ),
+       child: Column(
+         children: [
+           Container(
+             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+             decoration: BoxDecoration(
+               border: Border(
+                 bottom: BorderSide(
+                   color: Colors.grey.withValues(alpha: 0.3),
+                   width: 0.5,
+                 ),
+               ),
+             ),
+             child: Row(
+               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+               children: [
+                 TextButton(
+                   onPressed: () => Navigator.pop(context),
+                   child: const Text(
+                     'Cancelar',
+                     style: TextStyle(color: Colors.grey, fontSize: 16),
+                   ),
+                 ),
+                 const Text(
+                   'Selecionar Hora',
+                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                 ),
+                 TextButton(
+                   onPressed: () {
+                     setState(() {
+                       _selectedDateTime = DateTime(
+                         _selectedDateTime.year,
+                         _selectedDateTime.month,
+                         _selectedDateTime.day,
+                         tempTime.hour,
+                         tempTime.minute,
+                       );
+                     });
+                     Navigator.pop(context);
+                   },
+                   child: const Text(
+                     'Confirmar',
+                     style: TextStyle(color: Colors.blue, fontSize: 16, fontWeight: FontWeight.w600),
+                   ),
+                 ),
+               ],
+             ),
+           ),
+           Expanded(
+             child: CupertinoDatePicker(
+               mode: CupertinoDatePickerMode.time,
+               initialDateTime: _selectedDateTime,
+               use24hFormat: true,
+               onDateTimeChanged: (DateTime newTime) {
+                 tempTime = newTime;
+               },
+             ),
+           ),
+         ],
+       ),
+     ),
+   );
+ }
+ // lib/screens/add_reminder.dart - PARTE 2
 
   Future<void> _addNewCategory() async {
     final categoryName = _newCategoryController.text.trim();
@@ -380,6 +437,11 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       return;
     }
 
+    if (_isChecklist && _checklistItems.isEmpty) {
+      _showMessage('Adicione pelo menos um item ao checklist.', Colors.orange);
+      return;
+    }
+
     if (!mounted) return;
     setState(() => _isSaving = true);
 
@@ -422,6 +484,8 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         recurringType: isRecurring ? finalRecurringType : null,
         recurrenceInterval: finalInterval,
         notificationsEnabled: _isEditing ? widget.reminderToEdit!.notificationsEnabled : true,
+        isChecklist: _isChecklist,
+        checklistItems: _isChecklist ? _checklistItems : null,
       );
 
       int? savedId = reminder.id;
@@ -487,6 +551,8 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          _buildTypeToggleCard(),
+          const SizedBox(height: 16),
           _buildSimpleCard(
             icon: Icons.title,
             title: 'Título',
@@ -511,37 +577,436 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          _buildSimpleCard(
-            icon: Icons.description,
-            title: 'Descrição',
-            child: TextFormField(
-              controller: _descriptionController,
-              maxLines: 3,
-              maxLength: 500,
-              validator: (value) {
-                if (value != null && value.trim().length > 500) {
-                  return 'Descrição muito longa (máx. 500 caracteres)';
-                }
-                return null;
-              },
-              decoration: const InputDecoration(
-                hintText: 'Digite uma descrição (opcional)',
-                border: InputBorder.none,
-                counterText: '',
+          if (!_isChecklist) ...[
+            _buildSimpleCard(
+              icon: Icons.description,
+              title: 'Descrição',
+              child: TextFormField(
+                controller: _descriptionController,
+                maxLines: 3,
+                maxLength: 500,
+                validator: (value) {
+                  if (value != null && value.trim().length > 500) {
+                    return 'Descrição muito longa (máx. 500 caracteres)';
+                  }
+                  return null;
+                },
+                decoration: const InputDecoration(
+                  hintText: 'Digite uma descrição (opcional)',
+                  border: InputBorder.none,
+                  counterText: '',
+                ),
+                style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
               ),
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
+          ],
+          if (_isChecklist) ...[
+            _buildChecklistCard(),
+            const SizedBox(height: 16),
+          ],
           _buildCategoryCard(),
           const SizedBox(height: 16),
-          _buildRecurrenceCard(),
-          const SizedBox(height: 16),
+          if (!_isChecklist) ...[
+            _buildRecurrenceCard(),
+            const SizedBox(height: 16),
+          ],
           _buildDateCard(),
           const SizedBox(height: 16),
           _buildTimeCard(),
           const SizedBox(height: 24),
           _buildSaveButton(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTypeToggleCard() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: theme.shadowColor.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.category, color: colorScheme.primary, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Tipo',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.onSurface,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _isChecklist = false;
+                      _checklistItems.clear();
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: !_isChecklist 
+                          ? colorScheme.primary 
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: !_isChecklist 
+                            ? colorScheme.primary 
+                            : colorScheme.outline,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.notifications,
+                          color: !_isChecklist 
+                              ? colorScheme.onPrimary 
+                              : colorScheme.onSurface,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Lembrete',
+                          style: TextStyle(
+                            color: !_isChecklist 
+                                ? colorScheme.onPrimary 
+                                : colorScheme.onSurface,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _isChecklist = true;
+                      if (_checklistItems.isEmpty) {
+                        _checklistItems.add(ChecklistItem(text: '', order: 0));
+                      }
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: _isChecklist 
+                          ? colorScheme.primary 
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: _isChecklist 
+                            ? colorScheme.primary 
+                            : colorScheme.outline,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.checklist,
+                          color: _isChecklist 
+                              ? colorScheme.onPrimary 
+                              : colorScheme.onSurface,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Checklist',
+                          style: TextStyle(
+                            color: _isChecklist 
+                                ? colorScheme.onPrimary 
+                                : colorScheme.onSurface,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChecklistCard() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: theme.shadowColor.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.checklist, color: colorScheme.primary, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Items do Checklist',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.onSurface,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+              if (_checklistItems.isNotEmpty)
+                Text(
+                  '${_checklistItems.where((item) => item.isCompleted).length}/${_checklistItems.length}',
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_checklistItems.isEmpty) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceVariant.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: colorScheme.outline.withValues(alpha: 0.3),
+                  style: BorderStyle.solid,
+                ),
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.playlist_add,
+                    size: 48,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Nenhum item adicionado',
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Toque no botão abaixo para adicionar items',
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: 12,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            ReorderableListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _checklistItems.length,
+              onReorder: _reorderChecklistItems,
+              itemBuilder: (context, index) {
+                final item = _checklistItems[index];
+                return Container(
+                  key: ValueKey(item.hashCode),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: colorScheme.outline.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    leading: GestureDetector(
+                      onTap: () => _toggleChecklistItem(index),
+                      child: Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: item.isCompleted 
+                                ? Colors.green 
+                                : colorScheme.outline,
+                            width: 2,
+                          ),
+                          color: item.isCompleted 
+                              ? Colors.green 
+                              : Colors.transparent,
+                        ),
+                        child: item.isCompleted
+                            ? const Icon(
+                                Icons.check,
+                                color: Colors.white,
+                                size: 16,
+                              )
+                            : null,
+                      ),
+                    ),
+                    title: TextFormField(
+                      initialValue: item.text,
+                      style: TextStyle(
+                        decoration: item.isCompleted 
+                            ? TextDecoration.lineThrough 
+                            : null,
+                        color: item.isCompleted 
+                            ? colorScheme.onSurfaceVariant 
+                            : colorScheme.onSurface,
+                      ),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        hintText: 'Digite o item...',
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      onChanged: (value) {
+                        _checklistItems[index] = item.copyWith(text: value);
+                      },
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.drag_handle,
+                          color: colorScheme.onSurfaceVariant,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () => _removeChecklistItem(index),
+                          child: Icon(
+                            Icons.close,
+                            color: Colors.red,
+                            size: 20,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+          const SizedBox(height: 12),
+          if (_isAddingItem) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: colorScheme.primary.withValues(alpha: 0.5),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _newItemController,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        hintText: 'Digite o novo item...',
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      onFieldSubmitted: (_) => _addChecklistItem(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: _addChecklistItem,
+                    child: Icon(
+                      Icons.check,
+                      color: Colors.green,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _isAddingItem = false;
+                        _newItemController.clear();
+                      });
+                    },
+                    child: Icon(
+                      Icons.close,
+                      color: Colors.red,
+                      size: 24,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _isAddingItem = true;
+                  });
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('Adicionar Item'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: colorScheme.primary,
+                  side: BorderSide(color: colorScheme.primary),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -858,75 +1323,20 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
          }
          return null;
       },
-    );
-  }
+   );
+ }
 
-  Widget _buildDateCard() {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
+ Widget _buildDateCard() {
+   final theme = Theme.of(context);
+   final colorScheme = theme.colorScheme;
+   final isDark = theme.brightness == Brightness.dark;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: theme.shadowColor.withValues(alpha: 0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.calendar_today, color: colorScheme.primary, size: 20),
-          const SizedBox(width: 8),
-          Text(
-            'Data',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: colorScheme.onSurface,
-              fontSize: 14,
-            ),
-          ),
-          const Spacer(),
-          InkWell(
-            onTap: _selectDate,
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                DateFormat('dd/MM/yyyy').format(_selectedDateTime),
-                style: TextStyle(
-                  color: colorScheme.onPrimaryContainer,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimeCard() {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
+   return Container(
+     padding: const EdgeInsets.all(16),
+     decoration: BoxDecoration(
+       color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
+       borderRadius: BorderRadius.circular(12),
+       boxShadow: [
          BoxShadow(
            color: theme.shadowColor.withValues(alpha: 0.1),
            blurRadius: 8,
@@ -936,10 +1346,10 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
      ),
      child: Row(
        children: [
-         Icon(Icons.access_time, color: colorScheme.primary, size: 20),
+         Icon(Icons.calendar_today, color: colorScheme.primary, size: 20),
          const SizedBox(width: 8),
          Text(
-           'Hora',
+           'Data',
            style: TextStyle(
              fontWeight: FontWeight.bold,
              color: colorScheme.onSurface,
@@ -948,7 +1358,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
          ),
          const Spacer(),
          InkWell(
-           onTap: _selectTime,
+           onTap: _selectDate,
            borderRadius: BorderRadius.circular(8),
            child: Container(
              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -957,7 +1367,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                borderRadius: BorderRadius.circular(8),
              ),
              child: Text(
-               DateFormat('HH:mm').format(_selectedDateTime),
+               DateFormat('dd/MM/yyyy').format(_selectedDateTime),
                style: TextStyle(
                  color: colorScheme.onPrimaryContainer,
                  fontWeight: FontWeight.w600,
@@ -971,119 +1381,177 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
    );
  }
 
- Widget _buildSaveButton() {
-   return SizedBox(
-     width: double.infinity,
-     height: 50,
-     child: ElevatedButton(
-       onPressed: _saveReminder,
-       style: ElevatedButton.styleFrom(
-         backgroundColor: Colors.blue,
-         foregroundColor: Colors.white,
-         shape: RoundedRectangleBorder(
-           borderRadius: BorderRadius.circular(12),
-         ),
-       ),
-       child: Text(
-         _isEditing ? 'Atualizar Lembrete' : 'Salvar Lembrete',
-         style: const TextStyle(
-           fontSize: 16,
-           fontWeight: FontWeight.w600,
-         ),
-       ),
-     ),
-   );
- }
+ Widget _buildTimeCard() {
+   final theme = Theme.of(context);
+   final colorScheme = theme.colorScheme;
+   final isDark = theme.brightness == Brightness.dark;
 
-void _showAddCategoryDialog() {
-  Color tempSelectedColor = _selectedNewCategoryColor; // Variável temporária para o dialog
-  
-  showDialog(
-    context: context,
-    builder: (context) => StatefulBuilder( // Adicionar StatefulBuilder
-      builder: (context, setDialogState) => AlertDialog(
-        title: const Text('Nova Categoria'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _newCategoryController,
-              decoration: const InputDecoration(
-                labelText: 'Nome da categoria',
-                border: OutlineInputBorder(),
-              ),
-              maxLength: 50,
-            ),
-            const SizedBox(height: 16),
-            const Text('Escolha uma cor:'),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _predefinedColors.map((color) {
-                final isSelected = tempSelectedColor == color;
-                return GestureDetector(
-                  onTap: () {
-                    setDialogState(() { // Usar setDialogState em vez de setState
-                      tempSelectedColor = color;
-                    });
-                  },
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: isSelected ? Colors.black : Colors.transparent,
-                        width: 2,
-                      ),
-                    ),
-                    child: isSelected
-                        ? const Icon(
-                            Icons.check,
-                            color: Colors.white,
-                            size: 16,
-                          )
-                        : null,
-                  ),
-                );
-              }).toList(),
-            ),
-          ],
+   return Container(
+     padding: const EdgeInsets.all(16),
+     decoration: BoxDecoration(
+       color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
+       borderRadius: BorderRadius.circular(12),
+       boxShadow: [
+        BoxShadow(
+          color: theme.shadowColor.withValues(alpha: 0.1),
+          blurRadius: 8,
+          offset: const Offset(0, 2),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
+      ],
+    ),
+    child: Row(
+      children: [
+        Icon(Icons.access_time, color: colorScheme.primary, size: 20),
+        const SizedBox(width: 8),
+        Text(
+          'Hora',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: colorScheme.onSurface,
+            fontSize: 14,
           ),
-          ElevatedButton(
-            onPressed: _isCreatingCategory ? null : () {
-              setState(() {
-                _selectedNewCategoryColor = tempSelectedColor; // Atualizar a cor no widget pai
-              });
-              _addNewCategory();
-            },
-            child: _isCreatingCategory
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Adicionar'),
+        ),
+        const Spacer(),
+        InkWell(
+          onTap: _selectTime,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              DateFormat('HH:mm').format(_selectedDateTime),
+              style: TextStyle(
+                color: colorScheme.onPrimaryContainer,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
           ),
-        ],
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildSaveButton() {
+  return SizedBox(
+    width: double.infinity,
+    height: 50,
+    child: ElevatedButton(
+      onPressed: _saveReminder,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+      child: Text(
+        _isEditing 
+            ? (_isChecklist ? 'Atualizar Checklist' : 'Atualizar Lembrete')
+            : (_isChecklist ? 'Salvar Checklist' : 'Salvar Lembrete'),
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     ),
   );
 }
 
- @override
- void dispose() {
-   _titleController.dispose();
-   _descriptionController.dispose();
-   _newCategoryController.dispose();
-   _customIntervalController.dispose();
-   super.dispose();
- }
+void _showAddCategoryDialog() {
+ Color tempSelectedColor = _selectedNewCategoryColor;
+ 
+ showDialog(
+   context: context,
+   builder: (context) => StatefulBuilder(
+     builder: (context, setDialogState) => AlertDialog(
+       title: const Text('Nova Categoria'),
+       content: Column(
+         mainAxisSize: MainAxisSize.min,
+         children: [
+           TextFormField(
+             controller: _newCategoryController,
+             decoration: const InputDecoration(
+               labelText: 'Nome da categoria',
+               border: OutlineInputBorder(),
+             ),
+             maxLength: 50,
+           ),
+           const SizedBox(height: 16),
+           const Text('Escolha uma cor:'),
+           const SizedBox(height: 8),
+           Wrap(
+             spacing: 8,
+             runSpacing: 8,
+             children: _predefinedColors.map((color) {
+               final isSelected = tempSelectedColor == color;
+               return GestureDetector(
+                 onTap: () {
+                   setDialogState(() {
+                     tempSelectedColor = color;
+                   });
+                 },
+                 child: Container(
+                   width: 32,
+                   height: 32,
+                   decoration: BoxDecoration(
+                     color: color,
+                     shape: BoxShape.circle,
+                     border: Border.all(
+                       color: isSelected ? Colors.black : Colors.transparent,
+                       width: 2,
+                     ),
+                   ),
+                   child: isSelected
+                       ? const Icon(
+                           Icons.check,
+                           color: Colors.white,
+                           size: 16,
+                         )
+                       : null,
+                 ),
+               );
+             }).toList(),
+           ),
+         ],
+       ),
+       actions: [
+         TextButton(
+           onPressed: () => Navigator.pop(context),
+           child: const Text('Cancelar'),
+         ),
+         ElevatedButton(
+           onPressed: _isCreatingCategory ? null : () {
+             setState(() {
+               _selectedNewCategoryColor = tempSelectedColor;
+             });
+             _addNewCategory();
+           },
+           child: _isCreatingCategory
+               ? const SizedBox(
+                   width: 20,
+                   height: 20,
+                   child: CircularProgressIndicator(strokeWidth: 2),
+                 )
+               : const Text('Adicionar'),
+         ),
+       ],
+     ),
+   ),
+ );
+}
+
+@override
+void dispose() {
+  _titleController.dispose();
+  _descriptionController.dispose();
+  _newCategoryController.dispose();
+  _customIntervalController.dispose();
+  _newItemController.dispose();
+  super.dispose();
+}
 }
