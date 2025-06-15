@@ -815,7 +815,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: colorScheme.surfaceVariant.withValues(alpha: 0.3),
+                color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
                   color: colorScheme.outline.withValues(alpha: 0.3),
@@ -925,7 +925,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                         const SizedBox(width: 8),
                         GestureDetector(
                           onTap: () => _removeChecklistItem(index),
-                          child: Icon(
+                          child: const Icon(
                             Icons.close,
                             color: Colors.red,
                             size: 20,
@@ -966,7 +966,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                   const SizedBox(width: 8),
                   GestureDetector(
                     onTap: _addChecklistItem,
-                    child: Icon(
+                    child: const Icon(
                       Icons.check,
                       color: Colors.green,
                       size: 24,
@@ -980,7 +980,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
                         _newItemController.clear();
                       });
                     },
-                    child: Icon(
+                    child: const Icon(
                       Icons.close,
                       color: Colors.red,
                       size: 24,

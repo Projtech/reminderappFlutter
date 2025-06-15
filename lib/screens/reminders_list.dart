@@ -38,7 +38,7 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
   Map<String, Color> _categoryColorMap = {};
   
   // ✅ NOVO: Controle do modo rápido para checklists
-  Set<int> _quickModeActiveChecklists = {};
+  final Set<int> _quickModeActiveChecklists = {};
 
   DateTime get weekFromNow {
     final now = DateTime.now();
@@ -485,7 +485,6 @@ Widget _buildFilterChip(String label, String? value) {
     ),
   );
 }
-
 // ✅ NOVO: Widget especial para checklists
 Widget _buildChecklistItem(Reminder reminder) {
   final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -523,7 +522,7 @@ Widget _buildChecklistItem(Reminder reminder) {
               ? Colors.green.withValues(alpha: 0.3)
               : isOverdue
                   ? Colors.red.withValues(alpha: 0.3)
-                  : Colors.blue.withValues(alpha: 0.3), // ✅ Borda azul para checklists
+                  : Colors.blue.withValues(alpha: 0.3),
           width: 1,
         ),
       ),
@@ -537,54 +536,55 @@ Widget _buildChecklistItem(Reminder reminder) {
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.checklist,
-                      color: Colors.blue,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        reminder.title,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                          decoration: reminder.isCompleted ? TextDecoration.lineThrough : null,
-                          color: reminder.isCompleted
-                              ? (isDark ? Colors.grey[600] : Colors.grey[500])
-                              : null,
-                        ),
-                      ),
-                    ),
-                    // ✅ Badge de progresso
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        reminder.checklistProgress,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+Row(
+  children: [
+    const Icon(
+      Icons.checklist,
+      color: Colors.blue,
+      size: 20,
+    ),
+    const SizedBox(width: 8),
+    Flexible(
+      child: Text(
+        reminder.title,
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          fontSize: 16,
+          decoration: reminder.isCompleted ? TextDecoration.lineThrough : null,
+          color: reminder.isCompleted
+              ? (isDark ? Colors.grey[600] : Colors.grey[500])
+              : null,
+        ),
+      ),
+    ),
+    // ✅ Badge "0/1" ao lado do título
+    Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.blue.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        reminder.checklistProgress,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: Colors.blue,
+        ),
+      ),
+    ),
+  ],
+),
                 const SizedBox(height: 8),
-                // ✅ Barra de progresso visual
+                // ✅ ALTERAÇÃO 2: Barra de progresso maior (chegando perto do switch/botão)
                 Row(
                   children: [
-                    Expanded(
+                    SizedBox(
+                      width: 140, // ✅ AUMENTADO: era 120, agora 180 (mais perto do switch)
                       child: Container(
-                        height: 2, // ✅ DIMINUÍDO: era 4, agora 2
+                        height: 2,
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(1), // ✅ AJUSTADO: era 2, agora 1
+                          borderRadius: BorderRadius.circular(1),
                           color: isDark ? Colors.grey[700] : Colors.grey[300],
                         ),
                         child: FractionallySizedBox(
@@ -592,7 +592,7 @@ Widget _buildChecklistItem(Reminder reminder) {
                           widthFactor: reminder.completionPercentage,
                           child: Container(
                             decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(1), // ✅ AJUSTADO: era 2, agora 1
+                              borderRadius: BorderRadius.circular(1),
                               color: Colors.blue,
                             ),
                           ),
@@ -603,7 +603,7 @@ Widget _buildChecklistItem(Reminder reminder) {
                     Text(
                       '${(reminder.completionPercentage * 100).round()}%',
                       style: TextStyle(
-                        fontSize: 10, // ✅ DIMINUÍDO: era 11, agora 10
+                        fontSize: 13,
                         color: isDark ? Colors.grey[400] : Colors.grey[600],
                       ),
                     ),
@@ -658,19 +658,29 @@ Widget _buildChecklistItem(Reminder reminder) {
                 ),
               ],
             ),
+            // ✅ ALTERAÇÃO 1: Switch e botão "Rápido" centralizados
             trailing: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.center, // ✅ Centralizado
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // ✅ Botão de modo rápido
+                Switch(
+                  value: reminder.notificationsEnabled && !reminder.isCompleted,
+                  onChanged: reminder.isCompleted ? null : (value) {
+                    _toggleNotifications(reminder, value);
+                  },
+                  activeColor: Colors.blue,
+                ),
+                const SizedBox(height: 4), // ✅ Espaçamento menor
+                // ✅ Botão de modo rápido centralizado
                 GestureDetector(
                   onTap: () => _toggleQuickMode(reminder.id!),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), // ✅ AUMENTADO: era 8,4 agora 12,6
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), // ✅ Compacto
                     decoration: BoxDecoration(
                       color: isQuickModeActive 
                           ? Colors.orange 
                           : Colors.blue,
-                      borderRadius: BorderRadius.circular(8), // ✅ AUMENTADO: era 6, agora 8
+                      borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -678,28 +688,20 @@ Widget _buildChecklistItem(Reminder reminder) {
                         Icon(
                           isQuickModeActive ? Icons.close : Icons.flash_on,
                           color: Colors.white,
-                          size: 16, // ✅ AUMENTADO: era 14, agora 16
+                          size: 14, // ✅ Menor
                         ),
-                        const SizedBox(width: 6), // ✅ AUMENTADO: era 4, agora 6
+                        const SizedBox(width: 4),
                         Text(
                           isQuickModeActive ? 'Sair' : 'Rápido',
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 12, // ✅ AUMENTADO: era 11, agora 12
+                            fontSize: 11, // ✅ Menor
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                       ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Switch(
-                  value: reminder.notificationsEnabled && !reminder.isCompleted,
-                  onChanged: reminder.isCompleted ? null : (value) {
-                    _toggleNotifications(reminder, value);
-                  },
-                  activeColor: Colors.blue,
                 ),
               ],
             ),
@@ -1054,7 +1056,7 @@ Widget _buildChecklistItem(Reminder reminder) {
               Row(
                 children: [
                   if (reminder.isChecklist)
-                    Icon(
+                    const Icon(
                       Icons.checklist,
                       color: Colors.blue,
                       size: 24,
@@ -1393,34 +1395,34 @@ Widget _buildChecklistItem(Reminder reminder) {
    await _databaseHelper.updateReminder(updated);
 
    if (enabled && !reminder.isCompleted) {
-     if (reminder.dateTime.isAfter(DateTime.now())) {
-       if (reminder.isChecklist) {
-         await NotificationService.scheduleReminderNotifications(updated);
-       } else {
-         await NotificationService.scheduleNotification(
-           id: reminder.id!,
-           title: reminder.title,
-           description: reminder.description,
-           scheduledDate: reminder.dateTime,
-           category: reminder.category,
-         );
-       }
-     }
-   } else {
-     await NotificationService.cancelNotification(reminder.id!);
-   }
+    if (reminder.dateTime.isAfter(DateTime.now())) {
+      if (reminder.isChecklist) {
+        await NotificationService.scheduleReminderNotifications(updated);
+      } else {
+        await NotificationService.scheduleNotification(
+          id: reminder.id!,
+          title: reminder.title,
+          description: reminder.description,
+          scheduledDate: reminder.dateTime,
+          category: reminder.category,
+        );
+      }
+    }
+  } else {
+    await NotificationService.cancelNotification(reminder.id!);
+  }
 
-   _loadReminders();
+  _loadReminders();
 
-   if (mounted) {
-     ScaffoldMessenger.of(context).showSnackBar(
-       SnackBar(
-         content: Text(
-           enabled ? 'Notificações ativadas' : 'Notificações desativadas',
-         ),
-         duration: const Duration(seconds: 2),
-       ),
-     );
-   }
- }
+  if (mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          enabled ? 'Notificações ativadas' : 'Notificações desativadas',
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+}
 }

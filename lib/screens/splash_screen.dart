@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../screens/reminders_list.dart';
 import 'my_notes_screen.dart';
 import '../services/notification_service.dart';
-import '../database/database_helper.dart'; // Só este import adicional
+import '../database/database_helper.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -28,15 +28,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _initializeAppInBackground() async {
     try {
-      debugPrint('HomeScreen: Starting background initialization...');
-      
       await NotificationService.initialize();
       await _recheckRecurringRemindersOnStartup();
       await _requestNotificationPermissionIfNeeded();
       
-      debugPrint('HomeScreen: Background initialization completed');
     } catch (e) {
-      debugPrint('HomeScreen: Error in background initialization: $e');
+      // Error handled silently
     } finally {
       if (mounted) {
         setState(() {
@@ -46,41 +43,33 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _recheckRecurringRemindersOnStartup() async {
-    try {
-      final databaseHelper = DatabaseHelper();
-      final recurringReminders = await databaseHelper.getRecurringRemindersNeedingReschedule();
-      
-      if (recurringReminders.isEmpty) {
-        debugPrint("✅ Startup: Nenhum lembrete recorrente precisa reagendar");
-        return;
-      }
-      
-      int reagendados = 0;
-      for (final reminder in recurringReminders) {
-        if (reminder.notificationsEnabled && !reminder.isCompleted) {
-          try {
-            await NotificationService.cancelReminderNotifications(reminder.id!);
-            final success = await NotificationService.scheduleReminderNotifications(reminder);
-            
-            if (success) {
-              reagendados++;
-              debugPrint("✅ Reagendado: ${reminder.title}");
-            }
-          } catch (e) {
-            debugPrint("❌ Erro ao reagendar ${reminder.title}: $e");
-          }
+ Future<void> _recheckRecurringRemindersOnStartup() async {
+  try {
+    final databaseHelper = DatabaseHelper();
+    final recurringReminders = await databaseHelper.getRecurringRemindersNeedingReschedule();
+    
+    if (recurringReminders.isEmpty) {
+      return;
+    }
+    
+    for (final reminder in recurringReminders) {
+      if (reminder.notificationsEnabled && !reminder.isCompleted) {
+        try {
+          await NotificationService.cancelReminderNotifications(reminder.id!);
+          await NotificationService.scheduleReminderNotifications(reminder);
+          
+          // Breathing space for UI
+          await Future.delayed(const Duration(milliseconds: 5));
+        } catch (e) {
+          // Error handled silently
         }
       }
-      
-      if (reagendados > 0) {
-        debugPrint("🔄 STARTUP SEGURO: $reagendados lembretes reagendados");
-      }
-      
-    } catch (e) {
-      debugPrint("❌ ERRO CRÍTICO no reagendamento de startup: $e");
     }
+    
+  } catch (e) {
+    // Error handled silently
   }
+}
 
   Future<void> _requestNotificationPermissionIfNeeded() async {
     try {
@@ -89,7 +78,6 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
 
       if (!alreadyRequested) {
-        debugPrint("HomeScreen: Requesting core permissions for the first time.");
         final Map<Permission, PermissionStatus> statuses = await NotificationService.requestCorePermissions();
         if (!mounted) return;
 
@@ -107,12 +95,10 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
       } else {
-        debugPrint("HomeScreen: Permissions already requested. Checking status...");
         await NotificationService.checkNotificationPermissionStatus();
         await NotificationService.checkExactAlarmPermissionStatus();
       }
     } catch (e) {
-       debugPrint("HomeScreen: Error requesting notification permission: $e");
        if (mounted) {
          ScaffoldMessenger.of(context).showSnackBar(
            SnackBar(content: Text('Erro ao solicitar permissão: $e'), backgroundColor: Colors.red),
