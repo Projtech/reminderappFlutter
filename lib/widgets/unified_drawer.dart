@@ -9,15 +9,15 @@ import '../screens/notes_trash_screen.dart';
 import '../services/notification_service.dart';
 import '../services/backup_service.dart';
 import '../main.dart';
-import '../screens/reminders_list.dart';
-import '../screens/my_notes_screen.dart';
 
 class UnifiedDrawer extends StatefulWidget {
-  final String currentScreen; // 'reminders' ou 'notes'
+  final String currentScreen;
+  final VoidCallback? onDataImported;
 
   const UnifiedDrawer({
     super.key,
     required this.currentScreen,
+    this.onDataImported,
   });
 
   @override
@@ -353,33 +353,12 @@ class _UnifiedDrawerState extends State<UnifiedDrawer> {
       final success = await _backupService.importBackup(context);
 
       if (success && mounted) {
-        // ✅ REFRESH DIRETO: Voltar para home e reabrir a tela
-        Navigator.of(context).pop(); // Fechar drawer
+        Navigator.pop(context); // Fechar drawer
 
-        // Voltar para home
-        Navigator.of(context).popUntil((route) => route.isFirst);
-
-        // Aguardar um pouco e reabrir a tela atual
-        await Future.delayed(const Duration(milliseconds: 200));
-
-        if (widget.currentScreen == 'reminders') {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-                builder: (context) => const RemindersListScreen()),
-          );
-        } else if (widget.currentScreen == 'notes') {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (context) => const MyNotesScreen()),
-          );
+        // ✅ CHAMAR A FUNÇÃO QUE A TELA PASSOU
+        if (widget.onDataImported != null) {
+          widget.onDataImported!();
         }
-
-        // Mostrar mensagem de sucesso
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Backup importado e dados recarregados!'),
-            backgroundColor: Colors.green,
-          ),
-        );
       }
     } catch (e) {
       if (mounted) {

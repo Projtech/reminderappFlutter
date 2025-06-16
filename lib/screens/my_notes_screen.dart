@@ -131,7 +131,10 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
           ),
         ],
       ),
-drawer: const UnifiedDrawer(currentScreen: 'notes'),
+      drawer: UnifiedDrawer(
+        currentScreen: 'notes',
+        onDataImported: _loadNotes,
+      ),
       body: RefreshIndicator(
         onRefresh: _loadNotes,
         child: Column(

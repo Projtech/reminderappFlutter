@@ -375,7 +375,10 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
         backgroundColor: Colors.blue,
         child: const Icon(Icons.add),
       ),
-drawer: const UnifiedDrawer(currentScreen: 'reminders'),
+      drawer: UnifiedDrawer(
+        currentScreen: 'reminders',
+        onDataImported: _loadReminders,
+      ),
     );
   }
 
