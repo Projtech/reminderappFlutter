@@ -134,6 +134,8 @@ class BackupService {
   }
 
   Future<bool> importBackup(BuildContext context) async {
+    bool success = false;
+    
     try {
       // ✅ NOTIFICAR INÍCIO DO LOADING
       AppStateService().setLoading('backup_import', true);
@@ -211,15 +213,10 @@ class BackupService {
         }
       }
 
-// ✅ AGUARDAR CONCLUSÃO COMPLETA
-await Future.delayed(const Duration(milliseconds: 200));
-
-// ✅ NOTIFICAR SUCESSO COM POP-UP
-if (context.mounted) {
-  AppStateService().notifyImportSuccess(context, 'Backup importado com sucesso!');
-}
-
-return true;
+      // ✅ MARCAR SUCESSO
+      success = true;
+      return true;
+      
     } catch (e) {
       if (context.mounted) {
         _showSnackBar(
@@ -229,6 +226,20 @@ return true;
     } finally {
       // ✅ SEMPRE DESLIGAR O LOADING
       AppStateService().setLoading('backup_import', false);
+      
+      // ✅ SÓ NOTIFICAR SE FOI SUCESSO
+      if (success) {
+        // ✅ PEQUENO DELAY PARA GARANTIR QUE TUDO TERMINOU
+        await Future.delayed(const Duration(milliseconds: 100));
+        
+        // ✅ NOTIFICAR DADOS IMPORTADOS
+        AppStateService().notifyDataImported('all');
+        
+        // ✅ MOSTRAR SUCESSO
+        if (context.mounted) {
+          AppStateService().notifyImportSuccess(context, 'Backup importado com sucesso!');
+        }
+      }
     }
   }
 }

@@ -250,7 +250,7 @@ class _UnifiedDrawerState extends State<UnifiedDrawer> {
           leading: const Icon(Icons.file_download),
           title: const Text('Importar Backup'),
           onTap: () {
-            Navigator.pop(context);
+            // ✅ NÃO FECHAR O DRAWER ANTES DA IMPORTAÇÃO
             _importBackup();
           },
         ),
@@ -348,12 +348,14 @@ class _UnifiedDrawerState extends State<UnifiedDrawer> {
 
   Future<void> _importBackup() async {
     try {
-      Navigator.pop(context); // Fechar drawer ANTES da importação
-
+      // ✅ FECHAR O DRAWER APENAS APÓS A IMPORTAÇÃO
       final success = await _backupService.importBackup(context);
-
-      // ✅ NÃO PRECISA MAIS CHAMAR CALLBACK
-      // O AppStateService vai notificar automaticamente!
+      
+      // ✅ SE DEU CERTO, FECHAR O DRAWER
+      if (success && mounted) {
+        Navigator.pop(context);
+      }
+      
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
