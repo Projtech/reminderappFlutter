@@ -10,6 +10,7 @@ import '../database/category_helper.dart';
 import '../database/note_helper.dart';
 import '../models/reminder.dart';
 import '../models/note.dart';
+import 'app_state_service.dart';
 
 class BackupService {
   final DatabaseHelper _dbHelper = DatabaseHelper();
@@ -36,9 +37,7 @@ class BackupService {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Opções de Backup'),
-        content: const Text(
-          'Escolha o tipo de backup que deseja exportar:'
-        ),
+        content: const Text('Escolha o tipo de backup que deseja exportar:'),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
@@ -69,7 +68,8 @@ class BackupService {
   }
 
   // ✅ NOVO: Realizar exportação com ou sem lixeira
-  Future<String?> _performExport(BuildContext context, bool includeTrash) async {
+  Future<String?> _performExport(
+      BuildContext context, bool includeTrash) async {
     try {
       // Coletando dados ativos
       final reminders = await _dbHelper.getAllRemindersAsMaps();
@@ -77,8 +77,12 @@ class BackupService {
       final notes = await _noteHelper.getAllNotesAsMaps();
 
       // ✅ NOVO: Coletando dados da lixeira se solicitado
-      final deletedReminders = includeTrash ? await _dbHelper.getDeletedRemindersAsMaps() : <Map<String, dynamic>>[];
-      final deletedNotes = includeTrash ? await _noteHelper.getDeletedNotesAsMaps() : <Map<String, dynamic>>[];
+      final deletedReminders = includeTrash
+          ? await _dbHelper.getDeletedRemindersAsMaps()
+          : <Map<String, dynamic>>[];
+      final deletedNotes = includeTrash
+          ? await _noteHelper.getDeletedNotesAsMaps()
+          : <Map<String, dynamic>>[];
 
       final backupData = {
         'version': includeTrash ? 3 : 2, // ✅ VERSÃO 3 para backup com lixeira
@@ -95,7 +99,7 @@ class BackupService {
 
       final jsonString = jsonEncode(backupData);
 
-      final fileName = includeTrash 
+      final fileName = includeTrash
           ? 'backup_completo_${DateFormat('dd-MM-yyyy').format(DateTime.now())}.json'
           : 'backup_ativo_${DateFormat('dd-MM-yyyy').format(DateTime.now())}.json';
 
@@ -107,111 +111,124 @@ class BackupService {
 
       if (outputFile == null) {
         if (context.mounted) {
-           _showSnackBar(context, 'Exportação cancelada ou falhou.', Colors.grey);
+          _showSnackBar(
+              context, 'Exportação cancelada ou falhou.', Colors.grey);
         }
         return null;
       }
 
       if (context.mounted) {
-        final message = includeTrash 
+        final message = includeTrash
             ? 'Backup completo (com lixeira) exportado com sucesso!'
             : 'Backup dos dados ativos exportado com sucesso!';
         _showSnackBar(context, message, Colors.green);
       }
       return outputFile;
-
     } catch (e) {
       if (context.mounted) {
-         _showSnackBar(context, 'Erro ao exportar backup: ${e.toString()}', Colors.red);
+        _showSnackBar(
+            context, 'Erro ao exportar backup: ${e.toString()}', Colors.red);
       }
       return null;
     }
   }
 
-Future<bool> importBackup(BuildContext context) async {
-  try {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['json'],
-    );
+  Future<bool> importBackup(BuildContext context) async {
+    try {
+      // ✅ NOTIFICAR INÍCIO DO LOADING
+      AppStateService().setLoading('backup_import', true);
 
-    if (result == null || result.files.single.path == null) {
-      if (context.mounted) {
-         _showSnackBar(context, 'Nenhum arquivo selecionado', Colors.grey);
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+
+      if (result == null || result.files.single.path == null) {
+        if (context.mounted) {
+          _showSnackBar(context, 'Nenhum arquivo selecionado', Colors.grey);
+        }
+        return false;
       }
-      return false;
-    }
 
-    final filePath = result.files.single.path!;
-    final file = File(filePath);
-    final jsonString = await file.readAsString();
-    final backupData = jsonDecode(jsonString) as Map<String, dynamic>;
+      final filePath = result.files.single.path!;
+      final file = File(filePath);
+      final jsonString = await file.readAsString();
+      final backupData = jsonDecode(jsonString) as Map<String, dynamic>;
 
-    // Validação
-    final version = backupData['version'] ?? 1;
-    if (version < 1 || version > 3 || 
-        backupData['categories'] == null || 
-        backupData['reminders'] == null ||
-        backupData['notes'] == null) {
-      throw const FormatException('Formato de backup inválido');
-    }
-
-    // Limpar dados
-    await _catHelper.deleteAllCategoriesExceptDefault();
-    await _dbHelper.deleteAllReminders();
-    await _noteHelper.deleteAllNotes();
-
-    final categories = (backupData['categories'] as List).cast<Map<String, dynamic>>();
-    final reminders = (backupData['reminders'] as List).cast<Map<String, dynamic>>();
-    final notes = (backupData['notes'] as List).cast<Map<String, dynamic>>();
-
-    // Importar categorias
-    for (final categoryMap in categories) {
-      if (categoryMap['name']?.toLowerCase() != 'geral') {
-         final name = categoryMap['name'] as String?;
-         final color = categoryMap['color'] as String?;
-         if (name != null && color != null) {
-           await _catHelper.addCategory(name, color);
-         }
+      // Validação
+      final version = backupData['version'] ?? 1;
+      if (version < 1 ||
+          version > 3 ||
+          backupData['categories'] == null ||
+          backupData['reminders'] == null ||
+          backupData['notes'] == null) {
+        throw const FormatException('Formato de backup inválido');
       }
-    }
 
-    // Importar lembretes
-    for (final reminderMap in reminders) {
-      try {
-        final reminderMapWithoutId = Map<String, dynamic>.from(reminderMap);
-        reminderMapWithoutId.remove('id');
-        final reminder = Reminder.fromMap(reminderMapWithoutId);
-        await _dbHelper.insertReminder(reminder);
-      } catch (e) {
-        debugPrint('Erro ao importar lembrete: $e');
+      // Limpar dados
+      await _catHelper.deleteAllCategoriesExceptDefault();
+      await _dbHelper.deleteAllReminders();
+      await _noteHelper.deleteAllNotes();
+
+      final categories =
+          (backupData['categories'] as List).cast<Map<String, dynamic>>();
+      final reminders =
+          (backupData['reminders'] as List).cast<Map<String, dynamic>>();
+      final notes = (backupData['notes'] as List).cast<Map<String, dynamic>>();
+
+      // Importar categorias
+      for (final categoryMap in categories) {
+        if (categoryMap['name']?.toLowerCase() != 'geral') {
+          final name = categoryMap['name'] as String?;
+          final color = categoryMap['color'] as String?;
+          if (name != null && color != null) {
+            await _catHelper.addCategory(name, color);
+          }
+        }
       }
-    }
 
-    // Importar anotações
-    for (final noteMap in notes) {
-      try {
-        final noteMapWithoutId = Map<String, dynamic>.from(noteMap);
-        noteMapWithoutId.remove('id');
-        final note = Note.fromMap(noteMapWithoutId);
-        await _noteHelper.insertNote(note);
-      } catch (e) {
-        debugPrint('Erro ao importar anotação: $e');
+      // Importar lembretes
+      for (final reminderMap in reminders) {
+        try {
+          final reminderMapWithoutId = Map<String, dynamic>.from(reminderMap);
+          reminderMapWithoutId.remove('id');
+          final reminder = Reminder.fromMap(reminderMapWithoutId);
+          await _dbHelper.insertReminder(reminder);
+        } catch (e) {
+          debugPrint('Erro ao importar lembrete: $e');
+        }
       }
-    }
 
-    if (context.mounted) {
-      _showSnackBar(context, 'Backup importado com sucesso!', Colors.green);
-    }
-    return true;
+      // Importar anotações
+      for (final noteMap in notes) {
+        try {
+          final noteMapWithoutId = Map<String, dynamic>.from(noteMap);
+          noteMapWithoutId.remove('id');
+          final note = Note.fromMap(noteMapWithoutId);
+          await _noteHelper.insertNote(note);
+        } catch (e) {
+          debugPrint('Erro ao importar anotação: $e');
+        }
+      }
 
-  } catch (e) {
-    if (context.mounted) {
-       _showSnackBar(context, 'Erro ao importar backup: ${e.toString()}', Colors.red);
-    }
-    return false;
-  }
+// ✅ AGUARDAR CONCLUSÃO COMPLETA
+await Future.delayed(const Duration(milliseconds: 200));
+
+// ✅ NOTIFICAR SUCESSO COM POP-UP
+if (context.mounted) {
+  AppStateService().notifyImportSuccess(context, 'Backup importado com sucesso!');
 }
 
-  // ✅ NOVO: Diálogo com opções de importação
+return true;
+    } catch (e) {
+      if (context.mounted) {
+        _showSnackBar(
+            context, 'Erro ao importar backup: ${e.toString()}', Colors.red);
+      }
+      return false;
+    } finally {
+      // ✅ SEMPRE DESLIGAR O LOADING
+      AppStateService().setLoading('backup_import', false);
+    }
+  }
 }

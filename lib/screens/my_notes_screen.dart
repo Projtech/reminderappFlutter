@@ -5,8 +5,10 @@ import '../database/note_helper.dart';
 import '../models/note.dart';
 import 'package:intl/intl.dart';
 import 'add_note_screen.dart';
-// ✅ MANTIDO: Import da lixeira
-import '../widgets/unified_drawer.dart'; // ✅ MANTIDO: Import do UnifiedDrawer
+import 'dart:async';
+import 'package:flutter/scheduler.dart';
+import '../services/app_state_service.dart';
+import '../widgets/unified_drawer.dart';
 
 class MyNotesScreen extends StatefulWidget {
   const MyNotesScreen({super.key});
@@ -23,17 +25,24 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
   List<Note> _filteredNotes = [];
   bool _isLoading = true;
   bool _isSearching = false;
+  late StreamSubscription<DataChangeEvent> _dataSubscription;
+  late StreamSubscription<LoadingState> _loadingSubscription;
+  bool _isImporting = false; // ✅ ERRO 1: FALTAVA ESTA VARIÁVEL!
 
   @override
   void initState() {
     super.initState();
     _loadNotes();
     _searchController.addListener(_onSearchChanged);
+    _setupDataListener();
+    _setupLoadingListener();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _dataSubscription.cancel();
+    _loadingSubscription.cancel();
     super.dispose();
   }
 
@@ -84,6 +93,37 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
     });
   }
 
+  void _setupDataListener() {
+    _dataSubscription = AppStateService().dataChanges.listen((event) {
+      if (event.type == 'notes' || event.type == 'all') {
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _reloadDataSafely();
+          }
+        });
+      }
+    });
+  }
+
+  void _setupLoadingListener() {
+    _loadingSubscription = AppStateService().loadingState.listen((state) {
+      if (state.operation == 'backup_import') {
+        if (mounted) {
+          setState(() {
+            _isImporting = state.isLoading; // ✅ ERRO 2: FALTAVA ESTA LINHA!
+          });
+        }
+      }
+    });
+  }
+
+  Future<void> _reloadDataSafely() async {
+    await Future.delayed(const Duration(milliseconds: 100));
+    if (mounted) {
+      await _loadNotes();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -131,32 +171,62 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
           ),
         ],
       ),
-      drawer: UnifiedDrawer(
+      drawer: const UnifiedDrawer(
         currentScreen: 'notes',
-        onDataImported: _loadNotes,
       ),
-      body: RefreshIndicator(
-        onRefresh: _loadNotes,
-        child: Column(
-          children: [
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _filteredNotes.isEmpty
-                      ? _buildEmptyState()
-                      : ListView.builder(
-                          padding: const EdgeInsets.only(bottom: 80),
-                          itemCount: _filteredNotes.length,
-                          itemBuilder: (context, index) {
-                            final note = _filteredNotes[index];
-                            return _buildNoteItem(note);
-                          },
-                        ),
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: _loadNotes,
+            child: Column(
+              children: [
+                Expanded(
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _filteredNotes.isEmpty
+                          ? _buildEmptyState()
+                          : ListView.builder(
+                              padding: const EdgeInsets.only(bottom: 80),
+                              itemCount: _filteredNotes.length,
+                              itemBuilder: (context, index) {
+                                final note = _filteredNotes[index];
+                                return _buildNoteItem(note);
+                              },
+                            ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          if (_isImporting)
+            Container(
+              color: Colors.black.withOpacity(0.5),
+              child: const Center(
+                child: Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text(
+                          'Importando backup...',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Aguarde enquanto restauramos seus dados',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton( // ✅ ERRO 3: FALTAVA O FAB!
         onPressed: () async {
           final result = await Navigator.push(
             context,
@@ -384,7 +454,4 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
         ) ??
         false;
   }
-
-  // ✅ REMOVIDOS: Métodos _exportBackup() e _importBackup() não utilizados
-  // O backup agora é feito pelo UnifiedDrawer
 }

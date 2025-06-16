@@ -7,7 +7,10 @@ import '../services/notification_service.dart';
 import 'package:intl/intl.dart';
 import '../database/category_helper.dart';
 import 'checklist_screen.dart';
-import '../widgets/unified_drawer.dart'; // ✅ ALTERAÇÃO 1: Adicionar import
+import '../widgets/unified_drawer.dart';
+import 'dart:async';
+import 'package:flutter/scheduler.dart';
+import '../services/app_state_service.dart';
 
 class RemindersListScreen extends StatefulWidget {
   const RemindersListScreen({super.key});
@@ -29,6 +32,9 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
   DateTime? _selectedCustomDate;
   List<String> _normalizedCategories = [];
   Map<String, Color> _categoryColorMap = {};
+  late StreamSubscription<DataChangeEvent> _dataSubscription;
+  late StreamSubscription<LoadingState> _loadingSubscription;
+  bool _isImporting = false;
 
   // ✅ NOVO: Controle do modo rápido para checklists
   final Set<int> _quickModeActiveChecklists = {};
@@ -44,11 +50,15 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
     super.initState();
     _loadReminders();
     _searchController.addListener(_onSearchChanged);
+    _setupDataListener();
+    _setupLoadingListener();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _dataSubscription.cancel();
+    _loadingSubscription.cancel();
     super.dispose();
   }
 
@@ -240,6 +250,37 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
     });
   }
 
+  void _setupDataListener() {
+    _dataSubscription = AppStateService().dataChanges.listen((event) {
+      if (event.type == 'reminders' || event.type == 'all') {
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _reloadDataSafely();
+          }
+        });
+      }
+    });
+  }
+
+  void _setupLoadingListener() {
+    _loadingSubscription = AppStateService().loadingState.listen((state) {
+      if (state.operation == 'backup_import') {
+        if (mounted) {
+          setState(() {
+            _isImporting = state.isLoading;
+          });
+        }
+      }
+    });
+  }
+
+  Future<void> _reloadDataSafely() async {
+    await Future.delayed(const Duration(milliseconds: 100));
+    if (mounted) {
+      await _loadReminders();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -328,46 +369,79 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
             ),
         ],
       ),
-      body: Column(
+      body: Stack(
         children: [
-          // ✅ FILTROS LIMPOS SEM ANIMAÇÃO
-          if (_reminders.isNotEmpty) ...[
+          Column(
+            children: [
+              // ✅ FILTROS LIMPOS SEM ANIMAÇÃO
+              if (_reminders.isNotEmpty) ...[
+                Container(
+                  height: 50,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      _buildFilterChip("Todos", null),
+                      const SizedBox(width: 12),
+                      _buildFilterChip("Hoje", "today"),
+                      const SizedBox(width: 12),
+                      _buildFilterChip("Amanhã", "tomorrow"),
+                      const SizedBox(width: 12),
+                      _buildFilterChip("Semana", "week"),
+                      const SizedBox(width: 12),
+                      _buildFilterChip("Data", "custom"),
+                    ],
+                  ),
+                ),
+              ],
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _filteredReminders.isEmpty
+                        ? _buildEmptyState()
+                        : ListView.builder(
+                            padding: const EdgeInsets.only(bottom: 80),
+                            itemCount: _filteredReminders.length,
+                            itemBuilder: (context, index) {
+                              final reminder = _filteredReminders[index];
+                              // ✅ NOVO: Diferentes widgets para lembretes e checklists
+                              return reminder.isChecklist
+                                  ? _buildChecklistItem(reminder)
+                                  : _buildReminderItem(reminder);
+                            },
+                          ),
+              ),
+            ],
+          ),
+          if (_isImporting)
             Container(
-              height: 50,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  _buildFilterChip("Todos", null),
-                  const SizedBox(width: 12),
-                  _buildFilterChip("Hoje", "today"),
-                  const SizedBox(width: 12),
-                  _buildFilterChip("Amanhã", "tomorrow"),
-                  const SizedBox(width: 12),
-                  _buildFilterChip("Semana", "week"),
-                  const SizedBox(width: 12),
-                  _buildFilterChip("Data", "custom"),
-                ],
+              color: Colors.black.withOpacity(0.5),
+              child: const Center(
+                child: Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text(
+                          'Importando backup...',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w500),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Aguarde enquanto restauramos seus dados',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
-          ],
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _filteredReminders.isEmpty
-                    ? _buildEmptyState()
-                    : ListView.builder(
-                        padding: const EdgeInsets.only(bottom: 80),
-                        itemCount: _filteredReminders.length,
-                        itemBuilder: (context, index) {
-                          final reminder = _filteredReminders[index];
-                          // ✅ NOVO: Diferentes widgets para lembretes e checklists
-                          return reminder.isChecklist
-                              ? _buildChecklistItem(reminder)
-                              : _buildReminderItem(reminder);
-                        },
-                      ),
-          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -377,7 +451,6 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
       ),
       drawer: UnifiedDrawer(
         currentScreen: 'reminders',
-        onDataImported: _loadReminders,
       ),
     );
   }

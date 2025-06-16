@@ -12,12 +12,10 @@ import '../main.dart';
 
 class UnifiedDrawer extends StatefulWidget {
   final String currentScreen;
-  final VoidCallback? onDataImported;
 
   const UnifiedDrawer({
     super.key,
     required this.currentScreen,
-    this.onDataImported,
   });
 
   @override
@@ -350,16 +348,12 @@ class _UnifiedDrawerState extends State<UnifiedDrawer> {
 
   Future<void> _importBackup() async {
     try {
+      Navigator.pop(context); // Fechar drawer ANTES da importação
+
       final success = await _backupService.importBackup(context);
 
-      if (success && mounted) {
-        Navigator.pop(context); // Fechar drawer
-
-        // ✅ CHAMAR A FUNÇÃO QUE A TELA PASSOU
-        if (widget.onDataImported != null) {
-          widget.onDataImported!();
-        }
-      }
+      // ✅ NÃO PRECISA MAIS CHAMAR CALLBACK
+      // O AppStateService vai notificar automaticamente!
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
