@@ -5,9 +5,8 @@ import '../database/note_helper.dart';
 import '../models/note.dart';
 import 'package:intl/intl.dart';
 import 'add_note_screen.dart';
-import '../main.dart';
-import '../services/backup_service.dart';
-import 'notes_trash_screen.dart'; // ✅ NOVO: Import da lixeira
+// ✅ MANTIDO: Import da lixeira
+import '../widgets/unified_drawer.dart'; // ✅ MANTIDO: Import do UnifiedDrawer
 
 class MyNotesScreen extends StatefulWidget {
   const MyNotesScreen({super.key});
@@ -19,7 +18,7 @@ class MyNotesScreen extends StatefulWidget {
 class _MyNotesScreenState extends State<MyNotesScreen> {
   final NoteHelper _noteHelper = NoteHelper();
   final TextEditingController _searchController = TextEditingController();
-  final BackupService _backupService = BackupService();
+  // ✅ REMOVIDO: final BackupService _backupService = BackupService(); (não utilizado)
   List<Note> _notes = [];
   List<Note> _filteredNotes = [];
   bool _isLoading = true;
@@ -45,11 +44,11 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
   Future<void> _loadNotes() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
-    
+
     try {
       final notes = await _noteHelper.getAllNotes();
       if (!mounted) return;
-      
+
       setState(() {
         _notes = notes;
         _filterNotes();
@@ -132,7 +131,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
           ),
         ],
       ),
-      drawer: _buildDrawer(context), // ✅ RESTAURADO: Menu hambúrguer
+drawer: const UnifiedDrawer(currentScreen: 'notes'),
       body: RefreshIndicator(
         onRefresh: _loadNotes,
         child: Column(
@@ -175,7 +174,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
   Widget _buildEmptyState() {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -265,7 +264,8 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
               _loadNotes();
             }
           },
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           title: Text(
             note.title,
             style: TextStyle(
@@ -281,102 +281,14 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
             ),
           ),
           trailing: IconButton(
-            icon: Icon(note.isPinned ? Icons.push_pin : Icons.push_pin_outlined),
-            color: note.isPinned 
-                ? (isDark ? Colors.amber[300] : Colors.amber[700]) 
+            icon:
+                Icon(note.isPinned ? Icons.push_pin : Icons.push_pin_outlined),
+            color: note.isPinned
+                ? (isDark ? Colors.amber[300] : Colors.amber[700])
                 : (isDark ? Colors.grey[600] : Colors.grey[400]),
             onPressed: () => _togglePinNote(note),
           ),
         ),
-      ),
-    );
-  }
-
-  // ✅ RESTAURADO: Menu hambúrguer original + lixeira
-  Widget _buildDrawer(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: <Widget>[
-          DrawerHeader(
-            decoration: BoxDecoration(
-              color: isDark ? Colors.grey[800] : Colors.blue,
-            ),
-            child: const Text(
-              'Configurações',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-              ),
-            ),
-          ),
-          
-          ListTile(
-            leading: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
-            title: Text(isDark ? 'Modo Claro' : 'Modo Escuro'),
-            trailing: Switch(
-              value: isDark,
-              onChanged: (value) {
-                MyApp.of(context)?.changeTheme(value ? ThemeMode.dark : ThemeMode.light);
-              },
-            ),
-            onTap: () {
-              final newMode = isDark ? ThemeMode.light : ThemeMode.dark;
-              MyApp.of(context)?.changeTheme(newMode);
-            },
-          ),
-
-          // ✅ NOVO: Lixeira no menu hambúrguer
-          ListTile(
-            leading: const Icon(Icons.delete_outline),
-            title: const Text('Lixeira de Anotações'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const NotesTrashScreen()),
-              ).then((_) {
-                _loadNotes();
-              });
-            },
-          ),
-          
-          const Divider(),
-          
-          // SEÇÃO DE BACKUP
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(
-              'BACKUP',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
-              ),
-            ),
-          ),
-          
-          ListTile(
-            leading: const Icon(Icons.file_download),
-            title: const Text("Importar Backup"),
-            onTap: () {
-              Navigator.pop(context);
-              _importBackup();
-            },
-          ),
-          
-          ListTile(
-            leading: const Icon(Icons.file_upload),
-            title: const Text("Exportar Backup"),
-            onTap: () {
-              Navigator.pop(context);
-              _exportBackup();
-            },
-          ),
-          
-          const SizedBox(height: 16),
-        ],
       ),
     );
   }
@@ -386,7 +298,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
     try {
       await _noteHelper.deleteNote(note.id!);
       await _loadNotes();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -424,7 +336,8 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Anotação "${note.title}" ${updatedNote.isPinned ? 'fixada' : 'desafixada'}'),
+            content: Text(
+                'Anotação "${note.title}" ${updatedNote.isPinned ? 'fixada' : 'desafixada'}'),
             backgroundColor: Colors.green,
           ),
         );
@@ -433,7 +346,8 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao ${note.isPinned ? 'desafixar' : 'fixar'} anotação: $e'),
+            content: Text(
+                'Erro ao ${note.isPinned ? 'desafixar' : 'fixar'} anotação: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -444,120 +358,30 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
   // ✅ CORRIGIDO: Diálogo atualizado para lixeira
   Future<bool> _showDeleteConfirmation(Note note) async {
     return await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Mover para lixeira?'),
-        content: Text('A anotação "${note.title}" será movida para a lixeira e poderá ser restaurada posteriormente.'),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Mover para lixeira?'),
+            content: Text(
+                'A anotação "${note.title}" será movida para a lixeira e poderá ser restaurada posteriormente.'),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancelar'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: TextButton.styleFrom(foregroundColor: Colors.orange),
+                child: const Text('Mover para Lixeira'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.orange),
-            child: const Text('Mover para Lixeira'),
-          ),
-        ],
-      ),
-    ) ?? false;
+        ) ??
+        false;
   }
 
-  Future<void> _exportBackup() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Exportar Backup Completo'),
-        content: const Text(
-          'Esta ação irá exportar TODOS os seus dados:\n\n'
-          '• Todos os lembretes\n'
-          '• Todas as anotações\n'
-          '• Todas as categorias\n\n'
-          'Deseja continuar?'
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Exportar Tudo'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      try {
-        await _backupService.exportBackup(context);
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Erro inesperado: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  Future<void> _importBackup() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Importar Backup'),
-        content: const Text(
-          'Esta ação irá importar TODOS os dados do backup:\n\n'
-          '• Todos os lembretes\n'
-          '• Todas as anotações\n'
-          '• Todas as categorias\n\n'
-          '⚠️ ATENÇÃO: Dados existentes podem ser substituídos!\n\n'
-          'Deseja continuar?'
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-            ),
-            child: const Text('Importar Mesmo Assim'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      try {
-        final success = await _backupService.importBackup(context);
-        if (success) {
-          _loadNotes();
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Erro inesperado: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
-  }
+  // ✅ REMOVIDOS: Métodos _exportBackup() e _importBackup() não utilizados
+  // O backup agora é feito pelo UnifiedDrawer
 }

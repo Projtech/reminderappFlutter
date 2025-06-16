@@ -4,13 +4,10 @@ import '../database/database_helper.dart';
 import '../models/reminder.dart';
 import 'add_reminder.dart';
 import '../services/notification_service.dart';
-import '../services/backup_service.dart';
 import 'package:intl/intl.dart';
-import 'manage_categories_screen.dart';
 import '../database/category_helper.dart';
-import '../main.dart';
-import 'reminders_trash_screen.dart';
 import 'checklist_screen.dart';
+import '../widgets/unified_drawer.dart'; // ✅ ALTERAÇÃO 1: Adicionar import
 
 class RemindersListScreen extends StatefulWidget {
   const RemindersListScreen({super.key});
@@ -22,7 +19,6 @@ class RemindersListScreen extends StatefulWidget {
 class _RemindersListScreenState extends State<RemindersListScreen> {
   final DatabaseHelper _databaseHelper = DatabaseHelper();
   final CategoryHelper _categoryHelper = CategoryHelper();
-  final BackupService _backupService = BackupService();
   final TextEditingController _searchController = TextEditingController();
   List<Reminder> _reminders = [];
   List<Reminder> _filteredReminders = [];
@@ -230,39 +226,6 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
     }
   }
 
-  Future<void> _exportBackup() async {
-    try {
-      await _backupService.exportBackup(context);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro inesperado: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _importBackup() async {
-    try {
-      final success = await _backupService.importBackup(context);
-      if (success && mounted) {
-        await _loadReminders();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro inesperado: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   // ✅ NOVO: Métodos para gerenciar checklist
 
   // ✅ NOVO: Navegar para tela completa do checklist
@@ -412,7 +375,7 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
         backgroundColor: Colors.blue,
         child: const Icon(Icons.add),
       ),
-      drawer: _buildDrawer(),
+drawer: const UnifiedDrawer(currentScreen: 'reminders'),
     );
   }
 
@@ -681,252 +644,147 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
     );
   }
 
-  Widget _buildDrawer() {
+  // ✅ ALTERAÇÃO 3: MÉTODO _buildDrawer() REMOVIDO COMPLETAMENTE
+  // O UnifiedDrawer agora faz esse trabalho
+
+  Widget _buildReminderItem(Reminder reminder) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: <Widget>[
-          DrawerHeader(
-            decoration: BoxDecoration(
-              color: isDark ? Colors.grey[800] : Colors.blue,
-            ),
-            child: const Text(
-              'Configurações',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
+    final isOverdue =
+        reminder.dateTime.isBefore(DateTime.now()) && !reminder.isCompleted;
+    final categoryNormalized = reminder.category;
+    final categoryColor = _categoryColorMap[categoryNormalized] ?? Colors.grey;
+
+    return Dismissible(
+      key: Key(reminder.id.toString()),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.red,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(Icons.delete, color: Colors.white),
+      ),
+      confirmDismiss: (direction) async {
+        return await _showDeleteConfirmation(reminder);
+      },
+      onDismissed: (direction) {
+        _deleteReminder(reminder);
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.grey[900] : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: reminder.isCompleted
+                ? Colors.green.withValues(alpha: 0.3)
+                : isOverdue
+                    ? Colors.red.withValues(alpha: 0.3)
+                    : Colors.transparent,
+            width: 1,
+          ),
+        ),
+        child: ListTile(
+          onTap: () => _showReminderDetails(reminder),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                reminder.title,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                  decoration:
+                      reminder.isCompleted ? TextDecoration.lineThrough : null,
+                  color: reminder.isCompleted
+                      ? (isDark ? Colors.grey[600] : Colors.grey[500])
+                      : null,
+                ),
               ),
-            ),
-          ),
-          ListTile(
-            leading: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
-            title: Text(isDark ? 'Modo Claro' : 'Modo Escuro'),
-            trailing: Switch(
-              value: isDark,
-              onChanged: (value) {
-                MyApp.of(context)
-                    ?.changeTheme(value ? ThemeMode.dark : ThemeMode.light);
-              },
-            ),
-            onTap: () {
-              final newMode = isDark ? ThemeMode.light : ThemeMode.dark;
-              MyApp.of(context)?.changeTheme(newMode);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.category),
-            title: const Text('Gerenciar Categorias'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (context) => const ManageCategoriesScreen()),
-              ).then((_) {
-                _loadReminders();
-              });
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.delete_sweep),
-            title: const Text("Lixeira"),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (context) => const RemindersTrashScreen()),
-              ).then((_) {
-                _loadReminders();
-              });
-            },
-          ),
-          const Divider(),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(
-              'BACKUP',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
+              const SizedBox(height: 12),
+              // ✅ Categoria e Data - igual ao checklist
+              Row(
+                children: [
+                  if (categoryNormalized.isNotEmpty) ...[
+                    Icon(
+                      Icons.label,
+                      size: 14,
+                      color: categoryColor,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      categoryNormalized,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: categoryColor,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                  ],
+                  Icon(
+                    Icons.access_time,
+                    size: 14,
+                    color: isDark ? Colors.grey[500] : Colors.grey[600],
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    DateFormat('dd/MM/yyyy HH:mm').format(reminder.createdAt),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? Colors.grey[500] : Colors.grey[600],
+                    ),
+                  ),
+                ],
               ),
-            ),
+            ],
           ),
-          ListTile(
-            leading: const Icon(Icons.file_download),
-            title: const Text("Importar Backup"),
-            onTap: () {
-              Navigator.pop(context);
-              _importBackup();
-            },
+          trailing: Switch(
+            value: reminder.notificationsEnabled && !reminder.isCompleted,
+            onChanged: reminder.isCompleted
+                ? null
+                : (value) {
+                    _toggleNotifications(reminder, value);
+                  },
+            activeColor: Colors.blue,
           ),
-          ListTile(
-            leading: const Icon(Icons.file_upload),
-            title: const Text("Exportar Backup"),
-            onTap: () {
-              Navigator.pop(context);
-              _exportBackup();
-            },
-          ),
-          const Divider(),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          ),
-          ListTile(
-            leading: const Icon(Icons.battery_saver),
-            title: const Text('Desativar otimização de bateria'),
-            subtitle: const Text('Desabilitar otimização de bateria'),
-            onTap: () async {
-              Navigator.pop(context);
-              await NotificationService.requestBatteryOptimizationDisable();
-            },
-          ),
-          const SizedBox(height: 16),
-        ],
+        ),
       ),
     );
   }
 
-Widget _buildReminderItem(Reminder reminder) {
-  final isDark = Theme.of(context).brightness == Brightness.dark;
-  final isOverdue =
-      reminder.dateTime.isBefore(DateTime.now()) && !reminder.isCompleted;
-  final categoryNormalized = reminder.category;
-  final categoryColor = _categoryColorMap[categoryNormalized] ?? Colors.grey;
-
-  return Dismissible(
-    key: Key(reminder.id.toString()),
-    direction: DismissDirection.endToStart,
-    background: Container(
-      alignment: Alignment.centerRight,
-      padding: const EdgeInsets.only(right: 20),
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.red,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Icon(Icons.delete, color: Colors.white),
-    ),
-    confirmDismiss: (direction) async {
-      return await _showDeleteConfirmation(reminder);
-    },
-    onDismissed: (direction) {
-      _deleteReminder(reminder);
-    },
-    child: Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.grey[900] : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: reminder.isCompleted
-              ? Colors.green.withValues(alpha: 0.3)
-              : isOverdue
-                  ? Colors.red.withValues(alpha: 0.3)
-                  : Colors.transparent,
-          width: 1,
-        ),
-      ),
-      child: ListTile(
-        onTap: () => _showReminderDetails(reminder),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              reminder.title,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
-                decoration:
-                    reminder.isCompleted ? TextDecoration.lineThrough : null,
-                color: reminder.isCompleted
-                    ? (isDark ? Colors.grey[600] : Colors.grey[500])
-                    : null,
-              ),
-            ),
-            const SizedBox(height: 12),
-            // ✅ Categoria e Data - igual ao checklist
-            Row(
-              children: [
-                if (categoryNormalized.isNotEmpty) ...[
-                  Icon(
-                    Icons.label,
-                    size: 14,
-                    color: categoryColor,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    categoryNormalized,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: categoryColor,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                ],
-                Icon(
-                  Icons.access_time,
-                  size: 14,
-                  color: isDark ? Colors.grey[500] : Colors.grey[600],
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  DateFormat('dd/MM/yyyy HH:mm').format(reminder.createdAt),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.grey[500] : Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        trailing: Switch(
-          value: reminder.notificationsEnabled && !reminder.isCompleted,
-          onChanged: reminder.isCompleted
-              ? null
-              : (value) {
-                  _toggleNotifications(reminder, value);
-                },
-          activeColor: Colors.blue,
-        ),
-      ),
-    ),
-  );
-}
-
 // ✅ Método que estava faltando
-Widget _buildEmptyState() {
-  final isDark = Theme.of(context).brightness == Brightness.dark;
+  Widget _buildEmptyState() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-  return Center(
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(
-          Icons.notifications_none,
-          size: 64,
-          color: isDark ? Colors.grey[700] : Colors.grey[400],
-        ),
-        const SizedBox(height: 16),
-        Text(
-          _searchController.text.isNotEmpty
-              ? 'Nenhum lembrete encontrado'
-              : 'Nenhum lembrete criado',
-          style: TextStyle(
-            fontSize: 16,
-            color: isDark ? Colors.grey[600] : Colors.grey[600],
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.notifications_none,
+            size: 64,
+            color: isDark ? Colors.grey[700] : Colors.grey[400],
           ),
-        ),
-      ],
-    ),
-  );
-}
+          const SizedBox(height: 16),
+          Text(
+            _searchController.text.isNotEmpty
+                ? 'Nenhum lembrete encontrado'
+                : 'Nenhum lembrete criado',
+            style: TextStyle(
+              fontSize: 16,
+              color: isDark ? Colors.grey[600] : Colors.grey[600],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _showReminderDetails(Reminder reminder) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
