@@ -64,6 +64,16 @@ class NoteHelper {
    return await db.insert('notes', note.toMap());
  }
 
+ // ✅ NOVO: Método para inserir dados raw preservando estado deleted  SSSSSS
+ Future<int> insertNoteRaw(Map<String, dynamic> noteMap) async {
+  final db = await database;
+  // Remove o ID para evitar conflitos de UNIQUE constraint
+  final mapWithoutId = Map<String, dynamic>.from(noteMap);
+  mapWithoutId.remove('id');
+  return await db.insert('notes', mapWithoutId);
+}
+
+
  Future<List<Note>> getAllNotes() async {
    final db = await database;
    final List<Map<String, dynamic>> maps = await db.query('notes',

@@ -453,7 +453,7 @@ Container(
              return AnimatedContainer(
                duration: const Duration(milliseconds: 300),
                child: Text(
-                 '${_currentPercentage}%',
+                 '$_currentPercentage%',
                  style: TextStyle(
                    fontSize: 24,
                    fontWeight: FontWeight.bold,

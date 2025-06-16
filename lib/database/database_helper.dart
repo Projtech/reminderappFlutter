@@ -91,6 +91,15 @@ Future<int> insertReminder(Reminder reminder) async {
   return await db.insert('reminders', reminder.toMap());
 }
 
+// ✅ NOVO: Método para inserir dados raw preservando estado deleted
+Future<int> insertReminderRaw(Map<String, dynamic> reminderMap) async {
+  final db = await database;
+  // Remove o ID para evitar conflitos de UNIQUE constraint
+  final mapWithoutId = Map<String, dynamic>.from(reminderMap);
+  mapWithoutId.remove('id');
+  return await db.insert('reminders', mapWithoutId);
+}
+
 Future<List<Reminder>> getAllReminders() async {
   final db = await database;
   final List<Map<String, dynamic>> maps = await db.query('reminders',
