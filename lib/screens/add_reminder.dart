@@ -1,4 +1,5 @@
-// lib/screens/add_reminder.dart - PARTE 1
+import '../services/pix_suggestion_service.dart';
+import '../widgets/pix_suggestion_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:intl/intl.dart';
@@ -504,9 +505,12 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         }
       }
 
-      if (mounted) {
-        Navigator.pop(context, true);
-      }
+if (mounted) {
+  Navigator.pop(context, true);
+  
+  // ✅ SIMPLES E LIMPO
+  _triggerPixSuggestion();
+}
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -515,6 +519,33 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     }
   }
 
+  // ✅ NOVA FUNÇÃO (adicionar no final da classe, antes do último "}")
+Future<void> _triggerPixSuggestion() async {
+  if (_isEditing) return; // Só para lembretes novos
+  
+  try {
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    final pixService = PixSuggestionService();
+    await pixService.init();
+    await pixService.registerPositiveAction();
+    
+    final shouldSuggest = await pixService.shouldSuggestPix();
+    if (shouldSuggest && mounted) {
+      await pixService.registerSuggestionShown();
+      
+      showDialog(
+        context: context,
+        builder: (context) => PixSuggestionDialog(
+          onSupported: () async => await pixService.registerUserSupported(),
+          onDeclined: () async => await pixService.registerUserDeclined(),
+        ),
+      );
+    }
+  } catch (e) {
+    // Falha silenciosa
+  }
+}
   void _showMessage(String message, Color color) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(

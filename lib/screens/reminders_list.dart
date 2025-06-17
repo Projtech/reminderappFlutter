@@ -11,6 +11,8 @@ import '../widgets/unified_drawer.dart';
 import 'dart:async';
 import 'package:flutter/scheduler.dart';
 import '../services/app_state_service.dart';
+import '../services/pix_suggestion_service.dart';
+import '../widgets/pix_suggestion_dialog.dart';
 
 class RemindersListScreen extends StatefulWidget {
   const RemindersListScreen({super.key});
@@ -1196,7 +1198,7 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
     }
   }
 
-  void _toggleComplete(Reminder reminder) async {
+void _toggleComplete(Reminder reminder) async {
     final updated = reminder.copyWith(isCompleted: !reminder.isCompleted);
     await _databaseHelper.updateReminder(updated);
 
@@ -1204,6 +1206,9 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
       await NotificationService.cancelNotification(reminder.id!);
       // ✅ Limpar do modo rápido se concluído
       _quickModeActiveChecklists.remove(reminder.id);
+      
+      // 🎯 NOVO: Sugerir PIX após completar lembrete
+      _checkPixSuggestionAfterCompletion();
     } else if (updated.notificationsEnabled) {
       if (updated.dateTime.isAfter(DateTime.now())) {
         await NotificationService.scheduleNotification(
@@ -1218,6 +1223,32 @@ class _RemindersListScreenState extends State<RemindersListScreen> {
 
     _loadReminders();
   }
+
+  // ✅ FUNÇÃO CORRETA PARA PIX APÓS COMPLETAR LEMBRETE
+Future<void> _checkPixSuggestionAfterCompletion() async {
+  try {
+    await Future.delayed(const Duration(milliseconds: 800));
+    
+    final pixService = PixSuggestionService();
+    await pixService.init();
+    await pixService.registerPositiveAction();
+    
+    final shouldSuggest = await pixService.shouldSuggestPix();
+    if (shouldSuggest && mounted) {
+      await pixService.registerSuggestionShown();
+      
+      showDialog(
+        context: context,
+        builder: (context) => PixSuggestionDialog(
+          onSupported: () async => await pixService.registerUserSupported(),
+          onDeclined: () async => await pixService.registerUserDeclined(),
+        ),
+      );
+    }
+  } catch (e) {
+    // Falha silenciosa
+  }
+}
 
   void _toggleNotifications(Reminder reminder, bool enabled) async {
     HapticFeedback.lightImpact();
