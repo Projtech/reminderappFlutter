@@ -5,7 +5,7 @@ class SuccessPopup {
     showDialog(
       context: context,
       barrierDismissible: false,
-      barrierColor: Colors.black.withOpacity(0.3),
+      barrierColor: Colors.black..withValues(alpha: 0.3),
       useRootNavigator: true, // ✅ IMPEDE INTERFERÊNCIA NA NAVEGAÇÃO
       builder: (context) => _SuccessPopupWidget(message: message),
     );
@@ -92,7 +92,7 @@ class _SuccessPopupWidgetState extends State<_SuccessPopupWidget>
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
+                      color: Colors.black.withValues(alpha: 0.2),
                       blurRadius: 20,
                       offset: const Offset(0, 10),
                     ),

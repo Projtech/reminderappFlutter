@@ -1,5 +1,3 @@
-// ignore_for_file: use_build_context_synchronously
-
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,12 +5,16 @@ import '../screens/reminders_list.dart';
 import 'my_notes_screen.dart';
 import '../services/notification_service.dart';
 import '../database/database_helper.dart';
+import '../services/consent_service.dart';
+import '../widgets/consent_dialog.dart';
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
+  
 }
 
 class _HomeScreenState extends State<HomeScreen> {
@@ -23,30 +25,70 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _initializeAppInBackground();
   }
-
-  Future<void> _initializeAppInBackground() async {
-    try {
-      await Future.delayed(const Duration(milliseconds: 100));
+Future<void> _checkConsentIfNeeded() async {
+  try {
+    final consentService = ConsentService();
+    final hasShownConsent = await consentService.hasShownConsent();
+    
+    if (!hasShownConsent && mounted) {
+      // Aguardar um pouco para a tela carregar completamente
+      await Future.delayed(const Duration(milliseconds: 500));
       
-      await NotificationService.initialize();
-      await Future.delayed(const Duration(milliseconds: 10));
-      
-      await _recheckRecurringRemindersOnStartup();
-      await Future.delayed(const Duration(milliseconds: 10));
-      
-      await _requestNotificationPermissionIfNeeded();
-      
-    } catch (e) {
-      // Error handled silently
-    } finally {
       if (mounted) {
-        setState(() {
-          _isInitializing = false;
-        });
+        showDialog(
+          context: context,
+          barrierDismissible: false, // Não pode fechar clicando fora
+          builder: (context) => ConsentDialog(
+            onConsentGiven: (accepted) async {
+              await consentService.saveConsent(accepted);
+              
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      accepted 
+                        ? '✅ Obrigado! Isso nos ajuda a melhorar o app.'
+                        : '👍 Sem problemas! O app funciona normalmente.',
+                    ),
+                    backgroundColor: accepted ? Colors.green : Colors.blue,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            },
+          ),
+        );
       }
     }
+  } catch (e) {
+    // Error handled silently
   }
-
+}
+Future<void> _initializeAppInBackground() async {
+  try {
+    await Future.delayed(const Duration(milliseconds: 100));
+    
+    await NotificationService.initialize();
+    await Future.delayed(const Duration(milliseconds: 10));
+    
+    await _recheckRecurringRemindersOnStartup();
+    await Future.delayed(const Duration(milliseconds: 10));
+    
+    await _requestNotificationPermissionIfNeeded();
+    
+    // ✅ NOVO: Verificar consentimento LGPD
+    await _checkConsentIfNeeded();
+    
+  } catch (e) {
+    // Error handled silently
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isInitializing = false;
+      });
+    }
+  }
+}
 Future<void> _recheckRecurringRemindersOnStartup() async {
   try {
     final databaseHelper = DatabaseHelper();

@@ -9,6 +9,8 @@ import '../screens/notes_trash_screen.dart';
 import '../services/notification_service.dart';
 import '../services/backup_service.dart';
 import '../main.dart';
+import '../screens/about_screen.dart';
+import '../screens/privacy_screen.dart';
 
 class UnifiedDrawer extends StatefulWidget {
   final String currentScreen;
@@ -285,33 +287,33 @@ class _UnifiedDrawerState extends State<UnifiedDrawer> {
     ];
   }
 
-  Widget _buildAboutItem() {
-    return ListTile(
-      leading: const Icon(Icons.info_outline),
-      title: const Text('Sobre & Apoiar'),
-      onTap: () {
-        Navigator.pop(context);
+Widget _buildAboutItem() {
+  return ListTile(
+    leading: const Icon(Icons.info_outline),
+    title: const Text('Sobre & Apoiar'),
+    onTap: () {
+      Navigator.pop(context);
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const AboutScreen()),
+      );
+    },
+  );
+}
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Em breve: Tela Sobre & Apoiar')),
-        );
-      },
-    );
-  }
-
-  Widget _buildPrivacyItem() {
-    return ListTile(
-      leading: const Icon(Icons.privacy_tip_outlined),
-      title: const Text('Privacidade'),
-      onTap: () {
-        Navigator.pop(context);
-        // TODO: Implementar tela de Privacidade
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Em breve: Política de Privacidade')),
-        );
-      },
-    );
-  }
+Widget _buildPrivacyItem() {
+  return ListTile(
+    leading: const Icon(Icons.privacy_tip_outlined),
+    title: const Text('Privacidade'),
+    onTap: () {
+      Navigator.pop(context);
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const PrivacyScreen()),
+      );
+    },
+  );
+}
 
   Future<void> _editProfile() async {
     final updatedProfile = await EditProfileModal.show(

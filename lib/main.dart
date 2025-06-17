@@ -3,10 +3,14 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
+import 'services/report_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('pt_BR', null);
+  
+  // ✅ NOVO: Inicializar Supabase
+  await ReportService.initialize();
 
   final prefs = await SharedPreferences.getInstance();
   final String? themeModeString = prefs.getString('theme_mode');
