@@ -36,7 +36,7 @@ class ImageService {
               title: const Text('Câmera'),
               onTap: () async {
                 Navigator.pop(context);
-                final imagePath = await _pickFromCamera();
+                final imagePath = await pickFromCamera(); // 👈 AGORA PÚBLICO
                 Navigator.pop(context, imagePath);
               },
             ),
@@ -45,7 +45,7 @@ class ImageService {
               title: const Text('Galeria'),
               onTap: () async {
                 Navigator.pop(context);
-                final imagePath = await _pickFromGallery();
+                final imagePath = await pickFromGallery(); // 👈 AGORA PÚBLICO
                 Navigator.pop(context, imagePath);
               },
             ),
@@ -60,8 +60,8 @@ class ImageService {
     );
   }
 
-  // Selecionar da câmera
-  Future<String?> _pickFromCamera() async {
+  // 👈 REMOVIDO UNDERSCORE - AGORA PÚBLICO
+  Future<String?> pickFromCamera() async {
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.camera,
@@ -79,8 +79,8 @@ class ImageService {
     }
   }
 
-  // Selecionar da galeria
-  Future<String?> _pickFromGallery() async {
+  // 👈 REMOVIDO UNDERSCORE - AGORA PÚBLICO
+  Future<String?> pickFromGallery() async {
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.gallery,

@@ -64,16 +64,16 @@ class ConsentDialog extends StatelessWidget {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             const Text(
               'Para melhorar o app, gostaria de coletar apenas:',
               style: TextStyle(fontSize: 16),
             ),
-            
+
             const SizedBox(height: 12),
-            
+
             // Lista do que coleta
             Container(
               padding: const EdgeInsets.all(12),
@@ -83,29 +83,32 @@ class ConsentDialog extends StatelessWidget {
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: AppInfo.dataCollected.map((item) => 
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.circle, size: 6, color: Colors.blue),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            item,
-                            style: const TextStyle(fontSize: 13),
-                          ),
+                children: AppInfo.dataCollected
+                    .map(
+                      (item) => Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.circle,
+                                size: 6, color: Colors.blue),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                item,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
-                ).toList(),
+                      ),
+                    )
+                    .toList(),
               ),
             ),
-            
+
             const SizedBox(height: 12),
-            
+
             Text(
               '❌ Não coletamos dados pessoais, localização ou mensagens.',
               style: TextStyle(
@@ -114,9 +117,9 @@ class ConsentDialog extends StatelessWidget {
                 fontWeight: FontWeight.w500,
               ),
             ),
-            
+
             const SizedBox(height: 8),
-            
+
             Text(
               '⚖️ Você pode alterar essa escolha a qualquer momento em "Privacidade".',
               style: TextStyle(
@@ -153,7 +156,7 @@ class ConsentDialog extends StatelessWidget {
   }
 
   void _handleChoice(BuildContext context, bool accepted) {
-    Navigator.pop(context);
+    Navigator.of(context).pop(); // 👈 MUDANÇA AQUI
     onConsentGiven(accepted);
   }
 }

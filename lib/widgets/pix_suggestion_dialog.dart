@@ -183,9 +183,9 @@ class PixSuggestionDialog extends StatelessWidget {
             ),
             child: Column(
               children: [
-                Text(
+                const Text(
                   AppInfo.pixKey,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'monospace',
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
@@ -274,11 +274,11 @@ class PixSuggestionDialog extends StatelessWidget {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Row(
+          content: const Row(
             children: [
-              const Icon(Icons.check_circle, color: Colors.white),
-              const SizedBox(width: 8),
-              const Expanded(
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 8),
+              Expanded(
                 child: Text('Chave PIX copiada! Obrigado pelo apoio! 💚'),
               ),
             ],

@@ -228,12 +228,57 @@ class _EditProfileModalState extends State<EditProfileModal> {
   }
 
   Future<void> _changePhoto() async {
-    final newPhotoPath = await _imageService.pickImage(context);
-    if (newPhotoPath != null) {
-      setState(() {
-        _currentPhotoPath = newPhotoPath;
-      });
-    }
+    // Mostrar opções de seleção diretamente aqui
+    await showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Escolher Foto',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Câmera'),
+              onTap: () async {
+                Navigator.pop(context); // Fechar modal de opções
+                final imagePath = await _imageService.pickFromCamera();
+                if (mounted && imagePath != null) {
+                  setState(() {
+                    _currentPhotoPath = imagePath;
+                  });
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Galeria'),
+              onTap: () async {
+                Navigator.pop(context); // Fechar modal de opções
+                final imagePath = await _imageService.pickFromGallery();
+                if (mounted && imagePath != null) {
+                  setState(() {
+                    _currentPhotoPath = imagePath;
+                  });
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.cancel),
+              title: const Text('Cancelar'),
+              onTap: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _removePhoto() {
