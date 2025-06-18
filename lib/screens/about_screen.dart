@@ -67,7 +67,7 @@ class AboutScreen extends StatelessWidget {
             _buildInfoRow(
                 'Versão:', '${AppInfo.version} (${AppInfo.buildNumber})'),
             _buildInfoRow('Atualização:', AppInfo.lastUpdate),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Text(
               AppInfo.createdBy,
               style: TextStyle(

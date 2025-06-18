@@ -1,4 +1,3 @@
-// lib/screens/privacy_screen.dart
 import 'package:flutter/material.dart';
 import '../utils/app_info.dart';
 

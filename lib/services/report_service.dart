@@ -79,8 +79,9 @@ class ReportService {
       final hasConsent = await consentService.isDataCollectionEnabled();
 
       if (!hasConsent && includeTechnicalData) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print('Usuário não deu consentimento para coleta de dados');
+        }
         return false;
       }
 
