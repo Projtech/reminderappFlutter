@@ -505,10 +505,13 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         }
       }
 
+// pix
+
 if (mounted) {
+  // 1. PRIMEIRO: Fazer o pop e voltar para a tela de lembretes
   Navigator.pop(context, true);
   
-  // ✅ SIMPLES E LIMPO
+  // 2. DEPOIS: Trigger do PIX (sem await para não bloquear)
   _triggerPixSuggestion();
 }
     } catch (e) {
@@ -519,26 +522,35 @@ if (mounted) {
     }
   }
 
-  // ✅ NOVA FUNÇÃO (adicionar no final da classe, antes do último "}")
+// ✅ CORRIGIR a função _triggerPixSuggestion() no add_reminder.dart:
+
+// ✅ CORRIGIR a função _triggerPixSuggestion no add_reminder.dart:
+
 Future<void> _triggerPixSuggestion() async {
-  if (_isEditing) return; // Só para lembretes novos
+  if (_isEditing) return;
   
   try {
-    await Future.delayed(const Duration(milliseconds: 500));
+    // Delay menor para não bloquear o pop
+    await Future.delayed(const Duration(milliseconds: 200));
     
     final pixService = PixSuggestionService();
     await pixService.init();
     await pixService.registerPositiveAction();
     
     final shouldSuggest = await pixService.shouldSuggestPix();
+    
     if (shouldSuggest && mounted) {
       await pixService.registerSuggestionShown();
       
       showDialog(
         context: context,
         builder: (context) => PixSuggestionDialog(
-          onSupported: () async => await pixService.registerUserSupported(),
-          onDeclined: () async => await pixService.registerUserDeclined(),
+          onSupported: () {
+            pixService.registerUserSupported();
+          },
+          onDeclined: () {
+            pixService.registerUserDeclined();
+          },
         ),
       );
     }

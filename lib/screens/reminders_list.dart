@@ -1224,7 +1224,6 @@ void _toggleComplete(Reminder reminder) async {
     _loadReminders();
   }
 
-  // ✅ FUNÇÃO CORRETA PARA PIX APÓS COMPLETAR LEMBRETE
 Future<void> _checkPixSuggestionAfterCompletion() async {
   try {
     await Future.delayed(const Duration(milliseconds: 800));
@@ -1240,8 +1239,12 @@ Future<void> _checkPixSuggestionAfterCompletion() async {
       showDialog(
         context: context,
         builder: (context) => PixSuggestionDialog(
-          onSupported: () async => await pixService.registerUserSupported(),
-          onDeclined: () async => await pixService.registerUserDeclined(),
+          onSupported: () {
+            pixService.registerUserSupported();
+          },
+          onDeclined: () {
+            pixService.registerUserDeclined();
+          },
         ),
       );
     }
@@ -1249,7 +1252,6 @@ Future<void> _checkPixSuggestionAfterCompletion() async {
     // Falha silenciosa
   }
 }
-
   void _toggleNotifications(Reminder reminder, bool enabled) async {
     HapticFeedback.lightImpact();
 

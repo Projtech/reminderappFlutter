@@ -10,7 +10,7 @@ class PixSuggestionService {
   static const String _userSupportedKey = 'user_supported_pix';
   
   // Configurações do sistema
-  static const int _cooldownHours = 24; // Só sugere PIX a cada 24h
+  static const int _cooldownHours = 6;
   static const int _maxSuggestionsPerWeek = 3; // Máximo 3x por semana
   static const int _minActionsBeforeSuggestion = 1; // ← CORRIGIDO: Pelo menos 1 ação
   
@@ -35,42 +35,47 @@ class PixSuggestionService {
   }
 
   // ✅ FUNÇÃO PRINCIPAL: Verificar se deve sugerir PIX
-  Future<bool> shouldSuggestPix() async {
-    try {
-      final preferences = await prefs;
-      
-      // 1. Verificar se usuário já declinou muitas vezes
-      final userDeclined = preferences.getBool(_userDeclinedKey) ?? false;
-      if (userDeclined) return false;
-      
-      // 2. Verificar se usuário já apoiou (pode sugerir menos frequentemente)
-      final userSupported = preferences.getBool(_userSupportedKey) ?? false;
-      
-      // 3. Verificar cooldown (24h desde última sugestão)
-      final lastSuggestion = preferences.getInt(_lastSuggestionKey) ?? 0;
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final hoursSinceLastSuggestion = (now - lastSuggestion) / (1000 * 60 * 60);
-      
-      if (hoursSinceLastSuggestion < _cooldownHours) return false;
-      
-      // 4. Verificar limite semanal
-      final suggestionCount = await _getWeeklySuggestionCount();
-      if (suggestionCount >= _maxSuggestionsPerWeek) return false;
-      
-      // 5. Verificar se usuário fez ações suficientes
-      final actionCount = await _getActionCount();
-      if (actionCount < _minActionsBeforeSuggestion) return false; // ← CORRIGIDO
-      
-      // 6. Chance aleatória para não ser previsível
-      final random = Random();
-      final chance = userSupported ? 0.3 : 0.7; // Menos frequente se já apoiou
-      
-      return random.nextDouble() < chance;
-      
-    } catch (e) {
+// ✅ ADICIONAR no pix_suggestion_service.dart na função shouldSuggestPix():
+
+Future<bool> shouldSuggestPix() async {
+  try {
+    final preferences = await prefs;
+    
+    // 1. Verificar se usuário já declinou muitas vezes
+    final userDeclined = preferences.getBool(_userDeclinedKey) ?? false;
+    if (userDeclined) return false;
+    
+    // 2. Verificar se usuário já apoiou
+    final userSupported = preferences.getBool(_userSupportedKey) ?? false;
+    
+    // 3. Verificar cooldown (6h desde última sugestão)
+    final lastSuggestion = preferences.getInt(_lastSuggestionKey) ?? 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final hoursSinceLastSuggestion = (now - lastSuggestion) / (1000 * 60 * 60);
+    
+    if (hoursSinceLastSuggestion < _cooldownHours) {
       return false;
     }
+    
+    // 4. Verificar limite semanal
+    final suggestionCount = await _getWeeklySuggestionCount();
+    if (suggestionCount >= _maxSuggestionsPerWeek) return false;
+    
+    // 5. Verificar se usuário fez ações suficientes
+    final actionCount = await _getActionCount();
+    if (actionCount < _minActionsBeforeSuggestion) return false;
+    
+    // 6. Chance aleatória
+    final random = Random();
+    final chance = userSupported ? 0.5 : 0.85;
+    final randomValue = random.nextDouble();
+    
+    return randomValue < chance;
+    
+  } catch (e) {
+    return false;
   }
+}
 
   // ✅ Registrar momento positivo (criar/completar lembrete)
   Future<void> registerPositiveAction() async {
