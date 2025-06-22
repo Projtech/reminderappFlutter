@@ -1,6 +1,6 @@
 class AppInfo {
   static const String appName = 'Seus Lembretes';
-  static const String version = '1.0.0';
+  static const String version = '1.2.0+2';
   static const String buildNumber = '1';
   static const String createdBy = 'Criado em Olinda/PE';
   static const String developer = '@ProjTech';
@@ -10,8 +10,7 @@ class AppInfo {
   static const String contactEmail = 'projtechgestaoetecnologia@gmail.com';
 
   // Para futuro uso
-  static const String downloadUrl =
-      'https://seusite.com/download'; //Criar no futuro
+  static const String downloadUrl = 'https://seusite.com/download';
 
   // LGPD e privacidade
   static const String dataRetentionPeriod = '2 anos';
