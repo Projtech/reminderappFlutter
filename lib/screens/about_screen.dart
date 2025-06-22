@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../utils/app_info.dart';
 import '../widgets/report_bug_dialog.dart';
+import 'package:share_plus/share_plus.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
@@ -259,15 +260,26 @@ class AboutScreen extends StatelessWidget {
     );
   }
 
-  void _shareApp(BuildContext context) {
-    // Por enquanto só mostra uma mensagem
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Em breve: Compartilhamento do app'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
+void _shareApp(BuildContext context) {
+  const String appUrl = 'https://seuslembretes.vercel.app/';
+  const String shareText = '''🎯 Seus Lembretes - App Gratuito!
+
+Descobri este app incrível para organizar lembretes! É gratuito, simples e funciona offline.
+
+✅ Lembretes com alarme
+✅ Notas pessoais  
+✅ Funciona offline
+✅ Sem propagandas
+
+Baixe agora: $appUrl
+
+#lembretes #organização #produtividade''';
+
+  Share.share(
+    shareText,
+    subject: 'Seus Lembretes - App Gratuito de Lembretes',
+  );
+}
 
   void _reportBug(BuildContext context) {
     ReportBugDialog.show(context);

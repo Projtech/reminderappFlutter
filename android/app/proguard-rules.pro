@@ -60,3 +60,55 @@
     public void error(...);
     public void notImplemented();
 }
+
+-keep class io.supabase.** { *; }
+-keep class com.supabase.** { *; }
+-dontwarn io.supabase.**
+-dontwarn com.supabase.**
+
+# HTTP Client (usado pelo Supabase)
+-keep class okhttp3.** { *; }
+-keep class okio.** { *; }
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-keep class retrofit2.** { *; }
+-dontwarn retrofit2.**
+
+# JSON Serialization (crítico para API calls)
+-keepattributes Signature
+-keepattributes *Annotation*
+-keepattributes EnclosingMethod
+-keepattributes InnerClasses
+-keep class * implements java.io.Serializable { *; }
+-keepclassmembers class * implements java.io.Serializable {
+    static final long serialVersionUID;
+    private static final java.io.ObjectStreamField[] serialPersistentFields;
+    private void writeObject(java.io.ObjectOutputStream);
+    private void readObject(java.io.ObjectInputStream);
+    java.lang.Object writeReplace();
+    java.lang.Object readResolve();
+}
+
+# WebSocket Support (usado pelo Supabase Realtime)
+-keep class org.java_websocket.** { *; }
+-dontwarn org.java_websocket.**
+
+# Device Info Plugin (usado no ReportService)
+-keep class io.flutter.plugins.deviceinfo.** { *; }
+-dontwarn io.flutter.plugins.deviceinfo.**
+
+# Package Info Plugin (usado no ReportService)
+-keep class io.flutter.plugins.packageinfo.** { *; }
+-dontwarn io.flutter.plugins.packageinfo.**
+
+# SSL/TLS Classes (crítico para HTTPS)
+-keep class javax.net.ssl.** { *; }
+-keep class javax.security.** { *; }
+-dontwarn javax.net.ssl.**
+-dontwarn javax.security.**
+
+# Manter todas as classes relacionadas ao networking
+-keep class java.net.** { *; }
+-keep class java.nio.** { *; }
+-dontwarn java.net.**
+-dontwarn java.nio.**
