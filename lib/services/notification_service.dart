@@ -13,6 +13,10 @@ class NotificationService {
  static const String _channelName = 'Heads-Up Urgentes';
  static const String _channelDescription = 'Notificações que aparecem na tela com som.';
  static const int _maxScheduledNotifications = 15; // LIMITE DE AGENDAMENTOS
+// CANAL PARA ATUALIZAÇÕES
+ static const String _updateChannelId = 'app_update_channel';
+ static const String _updateChannelName = 'Atualizações do App';
+ static const String _updateChannelDescription = 'Notificações sobre novas versões disponíveis';
 
  @pragma('vm:entry-point')
  static Future<void> initialize() async {
@@ -28,6 +32,7 @@ class NotificationService {
      }
 
      await _createAndroidNotificationChannel();
+     await _createUpdateNotificationChannel();
 
      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
      const settings = InitializationSettings(android: androidSettings);
@@ -329,6 +334,71 @@ class NotificationService {
      title: '🚨 TESTE DE REPETIÇÕES 🚨',
      description: 'Sistema de repetições funcionando!',
      scheduledDate: now.add(Duration(seconds: seconds)),
+   );
+ }
+ // CRIAR CANAL DE ATUALIZAÇÕES
+ @pragma('vm:entry-point')
+ static Future<void> _createUpdateNotificationChannel() async {
+   const updateChannel = AndroidNotificationChannel(
+     _updateChannelId,
+     _updateChannelName,
+     description: _updateChannelDescription,
+     importance: Importance.high,
+     playSound: true,
+     enableVibration: true,
+     showBadge: true,
+   );
+   
+   try {
+     await _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+         ?.createNotificationChannel(updateChannel);
+   } catch (e) {
+     // Ignore creation errors
+   }
+ }
+
+ // NOTIFICAÇÃO DE ATUALIZAÇÃO
+ @pragma('vm:entry-point')
+ static Future<void> showUpdateNotification(Map<String, dynamic> updateInfo) async {
+   if (!_initialized) return;
+   
+   final version = updateInfo['version'] ?? 'Nova versão';
+   final whatsNew = updateInfo['whatsNew'] ?? {};
+   final items = whatsNew['items'] ?? [];
+   
+   // Contar novidades por categoria
+   int newCount = items.where((item) => item['category'] == 'new').length;
+   int improvedCount = items.where((item) => item['category'] == 'improved').length;
+   int fixedCount = items.where((item) => item['category'] == 'fixed').length;
+   
+   String description = '';
+   if (newCount > 0) description += '🆕 $newCount novidades';
+   if (improvedCount > 0) description += '${description.isNotEmpty ? ', ' : ''}⚡ $improvedCount melhorias';
+   if (fixedCount > 0) description += '${description.isNotEmpty ? ', ' : ''}🐛 $fixedCount correções';
+   
+   if (description.isEmpty) description = 'Toque para ver todas as novidades';
+   
+   final androidDetails = AndroidNotificationDetails(
+     _updateChannelId,
+     _updateChannelName,
+     channelDescription: _updateChannelDescription,
+     importance: Importance.high,
+     priority: Priority.high,
+     playSound: true,
+     enableVibration: true,
+     autoCancel: true,
+     ongoing: false,
+     ticker: 'Seus Lembretes - Atualização $version!',
+   );
+   
+   final notificationDetails = NotificationDetails(android: androidDetails);
+   
+   await _notifications.show(
+     99999, // ID fixo para atualizações
+     'Seus Lembretes - Atualização $version!',
+     description,
+     notificationDetails,
+     payload: 'update_available|$version',
    );
  }
 }

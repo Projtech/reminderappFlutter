@@ -3,18 +3,21 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
-import 'services/report_service.dart';
+import 'services/notification_service.dart';
+import 'services/timer_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('pt_BR', null);
-  
-  // ✅ NOVO: Inicializar Supabase
-  await ReportService.initialize();
+
+  await NotificationService.initialize();
+
+await TimerService.initialize();
 
   final prefs = await SharedPreferences.getInstance();
   final String? themeModeString = prefs.getString('theme_mode');
-  ThemeMode initialThemeMode = (themeModeString == 'dark') ? ThemeMode.dark : ThemeMode.light;
+  ThemeMode initialThemeMode =
+      (themeModeString == 'dark') ? ThemeMode.dark : ThemeMode.light;
 
   runApp(MyApp(initialThemeMode: initialThemeMode));
 }
@@ -23,10 +26,12 @@ class MyApp extends StatefulWidget {
   final ThemeMode initialThemeMode;
   const MyApp({super.key, required this.initialThemeMode});
 
-  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-  
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
+
   // ✅ CORREÇÃO 1: Tornar classe pública e método público
-  static MyAppState? of(BuildContext context) => context.findAncestorStateOfType<MyAppState>();
+  static MyAppState? of(BuildContext context) =>
+      context.findAncestorStateOfType<MyAppState>();
 
   @override
   State<MyApp> createState() => MyAppState(); // ✅ Retornar classe pública
@@ -47,9 +52,10 @@ class MyAppState extends State<MyApp> {
       _themeMode = themeMode;
     });
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('theme_mode', themeMode == ThemeMode.dark ? 'dark' : 'light');
+    await prefs.setString(
+        'theme_mode', themeMode == ThemeMode.dark ? 'dark' : 'light');
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final lightTheme = ThemeData(
@@ -91,29 +97,32 @@ class MyAppState extends State<MyApp> {
         elevation: 1,
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-         backgroundColor: Colors.blue[300],
-         foregroundColor: Colors.black,
+        backgroundColor: Colors.blue[300],
+        foregroundColor: Colors.black,
       ),
       drawerTheme: const DrawerThemeData(),
       switchTheme: SwitchThemeData(
-        thumbColor: WidgetStateProperty.resolveWith<Color?>((Set<WidgetState> states) {
+        thumbColor:
+            WidgetStateProperty.resolveWith<Color?>((Set<WidgetState> states) {
           if (states.contains(WidgetState.selected)) {
             return Colors.blue[300];
           }
           return null;
         }),
-        trackColor: WidgetStateProperty.resolveWith<Color?>((Set<WidgetState> states) {
+        trackColor:
+            WidgetStateProperty.resolveWith<Color?>((Set<WidgetState> states) {
           if (states.contains(WidgetState.selected)) {
             // ✅ CORREÇÃO 2: Usar withValues em vez de withAlpha
             return Colors.blue[300]?.withValues(alpha: 0.5); // 128/255 ≈ 0.5
           }
           return null;
         }),
-        trackOutlineColor: WidgetStateProperty.resolveWith<Color?>((Set<WidgetState> states) {
-           if (!states.contains(WidgetState.selected)) {
-             return Colors.grey[600];
-           }
-           return null;
+        trackOutlineColor:
+            WidgetStateProperty.resolveWith<Color?>((Set<WidgetState> states) {
+          if (!states.contains(WidgetState.selected)) {
+            return Colors.grey[600];
+          }
+          return null;
         }),
       ),
       useMaterial3: true,
@@ -123,7 +132,6 @@ class MyAppState extends State<MyApp> {
       title: 'Lembretes',
       navigatorKey: MyApp.navigatorKey,
       debugShowCheckedModeBanner: false,
-      
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -133,7 +141,6 @@ class MyAppState extends State<MyApp> {
         Locale('pt', 'BR'),
       ],
       locale: const Locale('pt', 'BR'),
-      
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: _themeMode,

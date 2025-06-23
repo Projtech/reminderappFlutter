@@ -11,379 +11,400 @@ import '../services/notification_service.dart';
 import 'dart:async';
 
 class AddReminderScreen extends StatefulWidget {
- final Reminder? reminderToEdit;
+  final Reminder? reminderToEdit;
 
- const AddReminderScreen({super.key, this.reminderToEdit});
+  const AddReminderScreen({super.key, this.reminderToEdit});
 
- @override
- State<AddReminderScreen> createState() => _AddReminderScreenState();
+  @override
+  State<AddReminderScreen> createState() => _AddReminderScreenState();
 }
 
 class _AddReminderScreenState extends State<AddReminderScreen> {
- final _formKey = GlobalKey<FormState>();
- final _titleController = TextEditingController();
- final _descriptionController = TextEditingController();
- final _newCategoryController = TextEditingController();
- final _customIntervalController = TextEditingController();
- final _newItemController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _newCategoryController = TextEditingController();
+  final _customIntervalController = TextEditingController();
+  final _newItemController = TextEditingController();
 
- late DateTime _selectedDateTime;
- late String _selectedCategory;
- late String _selectedRecurrenceType;
- late int _customInterval;
- late String _customUnit;
- 
- bool _isEditing = false;
- bool _isLoadingCategories = true;
- bool _isCreatingCategory = false;
- bool _isSaving = false;
- bool _isChecklist = false;
- bool _isAddingItem = false;
+  late DateTime _selectedDateTime;
+  late String _selectedCategory;
+  late String _selectedRecurrenceType;
+  late int _customInterval;
+  late String _customUnit;
 
- Map<String, Map<String, dynamic>> _categoriesMap = {};
- List<String> _normalizedCategoryNames = [];
- List<ChecklistItem> _checklistItems = [];
+  bool _isEditing = false;
+  bool _isLoadingCategories = true;
+  bool _isCreatingCategory = false;
+  bool _isSaving = false;
+  bool _isChecklist = false;
+  bool _isAddingItem = false;
 
- final DatabaseHelper _databaseHelper = DatabaseHelper();
- final CategoryHelper _categoryHelper = CategoryHelper();
- Color _selectedNewCategoryColor = Colors.grey;
+  Map<String, Map<String, dynamic>> _categoriesMap = {};
+  List<String> _normalizedCategoryNames = [];
+  List<ChecklistItem> _checklistItems = [];
 
- final List<Color> _predefinedColors = [
-   Colors.red, Colors.pink, Colors.purple, Colors.deepPurple,
-   Colors.indigo, Colors.blue, Colors.lightBlue, Colors.cyan,
-   Colors.teal, Colors.green, Colors.lightGreen, Colors.lime,
-   Colors.yellow, Colors.amber, Colors.orange, Colors.deepOrange,
-   Colors.brown, Colors.grey, Colors.blueGrey
- ];
+  final DatabaseHelper _databaseHelper = DatabaseHelper();
+  final CategoryHelper _categoryHelper = CategoryHelper();
+  Color _selectedNewCategoryColor = Colors.grey;
 
- final List<Map<String, String>> _recurrenceOptions = [
-   {'value': 'none', 'label': 'Não repetir'},
-   {'value': 'daily', 'label': 'Diariamente'},
-   {'value': 'weekly', 'label': 'Semanalmente'},
-   {'value': 'monthly', 'label': 'Mensalmente'},
-   {'value': 'custom', 'label': 'Personalizado'},
- ];
+  final List<Color> _predefinedColors = [
+    Colors.red,
+    Colors.pink,
+    Colors.purple,
+    Colors.deepPurple,
+    Colors.indigo,
+    Colors.blue,
+    Colors.lightBlue,
+    Colors.cyan,
+    Colors.teal,
+    Colors.green,
+    Colors.lightGreen,
+    Colors.lime,
+    Colors.yellow,
+    Colors.amber,
+    Colors.orange,
+    Colors.deepOrange,
+    Colors.brown,
+    Colors.grey,
+    Colors.blueGrey
+  ];
 
- final List<Map<String, String>> _customUnits = [
-   {'value': 'days', 'label': 'dias'},
-   {'value': 'weeks', 'label': 'semanas'},
-   {'value': 'months', 'label': 'meses'},
- ];
+  final List<Map<String, String>> _recurrenceOptions = [
+    {'value': 'none', 'label': 'Não repetir'},
+    {'value': 'daily', 'label': 'Diariamente'},
+    {'value': 'weekly', 'label': 'Semanalmente'},
+    {'value': 'monthly', 'label': 'Mensalmente'},
+    {'value': 'custom', 'label': 'Personalizado'},
+  ];
 
- @override
- void initState() {
-   super.initState();
-   _isEditing = widget.reminderToEdit != null;
+  final List<Map<String, String>> _customUnits = [
+    {'value': 'days', 'label': 'dias'},
+    {'value': 'weeks', 'label': 'semanas'},
+    {'value': 'months', 'label': 'meses'},
+  ];
 
-   if (_isEditing) {
-     final reminder = widget.reminderToEdit!;
-     _titleController.text = reminder.title;
-     _descriptionController.text = reminder.description;
-     _selectedDateTime = reminder.dateTime;
-     _selectedCategory = reminder.category.toLowerCase();
+  @override
+  void initState() {
+    super.initState();
+    _isEditing = widget.reminderToEdit != null;
 
-     _selectedRecurrenceType = reminder.recurringType ?? 'none';
-     _customInterval = reminder.recurrenceInterval;
-     _customIntervalController.text = _customInterval.toString();
+    if (_isEditing) {
+      final reminder = widget.reminderToEdit!;
+      _titleController.text = reminder.title;
+      _descriptionController.text = reminder.description;
+      _selectedDateTime = reminder.dateTime;
+      _selectedCategory = reminder.category.toLowerCase();
 
-     _isChecklist = reminder.isChecklist;
-     _checklistItems = List.from(reminder.checklistItems ?? []);
+      _selectedRecurrenceType = reminder.recurringType ?? 'none';
+      _customInterval = reminder.recurrenceInterval;
+      _customIntervalController.text = _customInterval.toString();
 
-     if (_selectedRecurrenceType.startsWith('custom_')) {
-       if (_selectedRecurrenceType == 'custom_daily') {
-         _customUnit = 'days';
-       } else if (_selectedRecurrenceType == 'custom_weekly') {
-         _customUnit = 'weeks';
-       } else if (_selectedRecurrenceType == 'custom_monthly') {
-         _customUnit = 'months';
-       } else {
-         _customUnit = 'days';
-       }
-       _selectedRecurrenceType = 'custom';
-     } else {
-       _customUnit = 'days';
-     }
-   } else {
-     _selectedDateTime = DateTime.now();
-     _selectedCategory = '';
-     _selectedRecurrenceType = 'none';
-     _customInterval = 1;
-     _customUnit = 'days';
-     _customIntervalController.text = '1';
-   }
+      _isChecklist = reminder.isChecklist;
+      _checklistItems = List.from(reminder.checklistItems ?? []);
 
-   _loadCategories();
- }
+      if (_selectedRecurrenceType.startsWith('custom_')) {
+        if (_selectedRecurrenceType == 'custom_daily') {
+          _customUnit = 'days';
+        } else if (_selectedRecurrenceType == 'custom_weekly') {
+          _customUnit = 'weeks';
+        } else if (_selectedRecurrenceType == 'custom_monthly') {
+          _customUnit = 'months';
+        } else {
+          _customUnit = 'days';
+        }
+        _selectedRecurrenceType = 'custom';
+      } else {
+        _customUnit = 'days';
+      }
+    } else {
+      _selectedDateTime = DateTime.now();
+      _selectedCategory = '';
+      _selectedRecurrenceType = 'none';
+      _customInterval = 1;
+      _customUnit = 'days';
+      _customIntervalController.text = '1';
+    }
 
- Future<void> _loadCategories() async {
-   try {
-     final categories = await _categoryHelper.getAllCategories();
-     final Map<String, Map<String, dynamic>> tempCategoriesMap = {};
-     final List<String> tempNormalizedNames = [];
+    _loadCategories();
+  }
 
-     for (final catMap in categories) {
-       final originalName = catMap['name'] as String? ?? '';
-       final normalizedName = originalName.trim().toLowerCase();
-       if (normalizedName.isEmpty) continue;
+  Future<void> _loadCategories() async {
+    try {
+      final categories = await _categoryHelper.getAllCategories();
+      final Map<String, Map<String, dynamic>> tempCategoriesMap = {};
+      final List<String> tempNormalizedNames = [];
 
-       final colorHex = catMap['color'] as String? ?? 'FF808080';
-       final color = _parseColorHex(colorHex, normalizedName);
+      for (final catMap in categories) {
+        final originalName = catMap['name'] as String? ?? '';
+        final normalizedName = originalName.trim().toLowerCase();
+        if (normalizedName.isEmpty) continue;
 
-       tempCategoriesMap[normalizedName] = {
-         'originalName': originalName,
-         'colorHex': colorHex,
-         'color': color,
-       };
-       tempNormalizedNames.add(normalizedName);
-     }
+        final colorHex = catMap['color'] as String? ?? 'FF808080';
+        final color = _parseColorHex(colorHex, normalizedName);
 
-     tempNormalizedNames.sort();
+        tempCategoriesMap[normalizedName] = {
+          'originalName': originalName,
+          'colorHex': colorHex,
+          'color': color,
+        };
+        tempNormalizedNames.add(normalizedName);
+      }
 
-     setState(() {
-       _categoriesMap = tempCategoriesMap;
-       _normalizedCategoryNames = tempNormalizedNames;
+      tempNormalizedNames.sort();
 
-       if (_normalizedCategoryNames.isNotEmpty) {
-         if (!_normalizedCategoryNames.contains(_selectedCategory) || _selectedCategory.isEmpty) {
-           _selectedCategory = _normalizedCategoryNames.first;
-         }
-       } else {
-         _selectedCategory = '';
-       }
-       _isLoadingCategories = false;
-     });
-   } catch (e) {
-     if (!mounted) return;
-     setState(() => _isLoadingCategories = false);
-     _showMessage('Erro ao carregar categorias', Colors.red);
-   }
- }
+      setState(() {
+        _categoriesMap = tempCategoriesMap;
+        _normalizedCategoryNames = tempNormalizedNames;
 
- Color _parseColorHex(String colorHex, String normalizedName) {
-   try {
-     if (colorHex.length == 6) {
-       return Color(int.parse('FF$colorHex', radix: 16));
-     } else if (colorHex.length == 8) {
-       return Color(int.parse(colorHex, radix: 16));
-     }
-   } catch (e) {
-     // Ignore error and use default
-   }
+        if (_normalizedCategoryNames.isNotEmpty) {
+          if (!_normalizedCategoryNames.contains(_selectedCategory) ||
+              _selectedCategory.isEmpty) {
+            _selectedCategory = _normalizedCategoryNames.first;
+          }
+        } else {
+          _selectedCategory = '';
+        }
+        _isLoadingCategories = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingCategories = false);
+      _showMessage('Erro ao carregar categorias', Colors.red);
+    }
+  }
 
-   switch (normalizedName) {
-     case 'trabalho':
-       return Colors.blue;
-     case 'pessoal':
-       return Colors.green;
-     case 'saúde':
-       return Colors.red;
-     case 'estudo':
-       return Colors.orange;
-     case 'casa':
-       return Colors.brown;
-     default:
-       return Colors.grey;
-   }
- }
+  Color _parseColorHex(String colorHex, String normalizedName) {
+    try {
+      if (colorHex.length == 6) {
+        return Color(int.parse('FF$colorHex', radix: 16));
+      } else if (colorHex.length == 8) {
+        return Color(int.parse(colorHex, radix: 16));
+      }
+    } catch (e) {
+      // Ignore error and use default
+    }
 
- void _addChecklistItem() {
-   final text = _newItemController.text.trim();
-   if (text.isNotEmpty) {
-     setState(() {
-       _checklistItems.add(ChecklistItem(
-         text: text,
-         order: _checklistItems.length,
-       ));
-       _newItemController.clear();
-       _isAddingItem = false;
-     });
-   }
- }
+    switch (normalizedName) {
+      case 'trabalho':
+        return Colors.blue;
+      case 'pessoal':
+        return Colors.green;
+      case 'saúde':
+        return Colors.red;
+      case 'estudo':
+        return Colors.orange;
+      case 'casa':
+        return Colors.brown;
+      default:
+        return Colors.grey;
+    }
+  }
 
- void _removeChecklistItem(int index) {
-   setState(() {
-     _checklistItems.removeAt(index);
-     // Reordenar os items
-     for (int i = 0; i < _checklistItems.length; i++) {
-       _checklistItems[i] = _checklistItems[i].copyWith(order: i);
-     }
-   });
- }
+  void _addChecklistItem() {
+    final text = _newItemController.text.trim();
+    if (text.isNotEmpty) {
+      setState(() {
+        _checklistItems.add(ChecklistItem(
+          text: text,
+          order: _checklistItems.length,
+        ));
+        _newItemController.clear();
+        _isAddingItem = false;
+      });
+    }
+  }
 
- void _toggleChecklistItem(int index) {
-   setState(() {
-     _checklistItems[index] = _checklistItems[index].copyWith(
-       isCompleted: !_checklistItems[index].isCompleted,
-     );
-   });
- }
+  void _removeChecklistItem(int index) {
+    setState(() {
+      _checklistItems.removeAt(index);
+      // Reordenar os items
+      for (int i = 0; i < _checklistItems.length; i++) {
+        _checklistItems[i] = _checklistItems[i].copyWith(order: i);
+      }
+    });
+  }
 
- void _reorderChecklistItems(int oldIndex, int newIndex) {
-   setState(() {
-     if (newIndex > oldIndex) {
-       newIndex -= 1;
-     }
-     final item = _checklistItems.removeAt(oldIndex);
-     _checklistItems.insert(newIndex, item);
-     
-     // Reordenar os items
-     for (int i = 0; i < _checklistItems.length; i++) {
-       _checklistItems[i] = _checklistItems[i].copyWith(order: i);
-     }
-   });
- }
+  void _toggleChecklistItem(int index) {
+    setState(() {
+      _checklistItems[index] = _checklistItems[index].copyWith(
+        isCompleted: !_checklistItems[index].isCompleted,
+      );
+    });
+  }
 
- Future<void> _selectDate() async {
-   DateTime tempDate = _selectedDateTime;
-   
-   await showModalBottomSheet(
-     context: context,
-     backgroundColor: Colors.transparent,
-     builder: (context) => Container(
-       height: 300,
-       decoration: BoxDecoration(
-         color: Theme.of(context).scaffoldBackgroundColor,
-         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-       ),
-       child: Column(
-         children: [
-           Container(
-             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-             decoration: BoxDecoration(
-               border: Border(
-                 bottom: BorderSide(
-                   color: Colors.grey.withValues(alpha: 0.3),
-                   width: 0.5,
-                 ),
-               ),
-             ),
-             child: Row(
-               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-               children: [
-                 TextButton(
-                   onPressed: () => Navigator.pop(context),
-                   child: const Text(
-                     'Cancelar',
-                     style: TextStyle(color: Colors.grey, fontSize: 16),
-                   ),
-                 ),
-                 const Text(
-                   'Selecionar Data',
-                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                 ),
-                 TextButton(
-                   onPressed: () {
-                     setState(() {
-                       _selectedDateTime = DateTime(
-                         tempDate.year,
-                         tempDate.month,
-                         tempDate.day,
-                         _selectedDateTime.hour,
-                         _selectedDateTime.minute,
-                       );
-                     });
-                     Navigator.pop(context);
-                   },
-                   child: const Text(
-                     'Confirmar',
-                     style: TextStyle(color: Colors.blue, fontSize: 16, fontWeight: FontWeight.w600),
-                   ),
-                 ),
-               ],
-             ),
-           ),
-           Expanded(
-             child: CupertinoDatePicker(
-               mode: CupertinoDatePickerMode.date,
-               initialDateTime: _selectedDateTime,
-               minimumDate: DateTime.now().subtract(const Duration(days: 365)),
-               maximumDate: DateTime.now().add(const Duration(days: 365 * 5)),
-               onDateTimeChanged: (DateTime newDate) {
-                 tempDate = newDate;
-               },
-             ),
-           ),
-         ],
-       ),
-     ),
-   );
- }
+  void _reorderChecklistItems(int oldIndex, int newIndex) {
+    setState(() {
+      if (newIndex > oldIndex) {
+        newIndex -= 1;
+      }
+      final item = _checklistItems.removeAt(oldIndex);
+      _checklistItems.insert(newIndex, item);
 
- Future<void> _selectTime() async {
-   DateTime tempTime = _selectedDateTime;
-   
-   await showModalBottomSheet(
-     context: context,
-     backgroundColor: Colors.transparent,
-     builder: (context) => Container(
-       height: 300,
-       decoration: BoxDecoration(
-         color: Theme.of(context).scaffoldBackgroundColor,
-         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-       ),
-       child: Column(
-         children: [
-           Container(
-             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-             decoration: BoxDecoration(
-               border: Border(
-                 bottom: BorderSide(
-                   color: Colors.grey.withValues(alpha: 0.3),
-                   width: 0.5,
-                 ),
-               ),
-             ),
-             child: Row(
-               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-               children: [
-                 TextButton(
-                   onPressed: () => Navigator.pop(context),
-                   child: const Text(
-                     'Cancelar',
-                     style: TextStyle(color: Colors.grey, fontSize: 16),
-                   ),
-                 ),
-                 const Text(
-                   'Selecionar Hora',
-                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                 ),
-                 TextButton(
-                   onPressed: () {
-                     setState(() {
-                       _selectedDateTime = DateTime(
-                         _selectedDateTime.year,
-                         _selectedDateTime.month,
-                         _selectedDateTime.day,
-                         tempTime.hour,
-                         tempTime.minute,
-                       );
-                     });
-                     Navigator.pop(context);
-                   },
-                   child: const Text(
-                     'Confirmar',
-                     style: TextStyle(color: Colors.blue, fontSize: 16, fontWeight: FontWeight.w600),
-                   ),
-                 ),
-               ],
-             ),
-           ),
-           Expanded(
-             child: CupertinoDatePicker(
-               mode: CupertinoDatePickerMode.time,
-               initialDateTime: _selectedDateTime,
-               use24hFormat: true,
-               onDateTimeChanged: (DateTime newTime) {
-                 tempTime = newTime;
-               },
-             ),
-           ),
-         ],
-       ),
-     ),
-   );
- }
- // lib/screens/add_reminder.dart - PARTE 2
+      // Reordenar os items
+      for (int i = 0; i < _checklistItems.length; i++) {
+        _checklistItems[i] = _checklistItems[i].copyWith(order: i);
+      }
+    });
+  }
+
+  Future<void> _selectDate() async {
+    DateTime tempDate = _selectedDateTime;
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: 300,
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: Colors.grey.withValues(alpha: 0.3),
+                    width: 0.5,
+                  ),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      'Cancelar',
+                      style: TextStyle(color: Colors.grey, fontSize: 16),
+                    ),
+                  ),
+                  const Text(
+                    'Selecionar Data',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _selectedDateTime = DateTime(
+                          tempDate.year,
+                          tempDate.month,
+                          tempDate.day,
+                          _selectedDateTime.hour,
+                          _selectedDateTime.minute,
+                        );
+                      });
+                      Navigator.pop(context);
+                    },
+                    child: const Text(
+                      'Confirmar',
+                      style: TextStyle(
+                          color: Colors.blue,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.date,
+                initialDateTime: _selectedDateTime,
+                minimumDate: DateTime.now().subtract(const Duration(days: 365)),
+                maximumDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                onDateTimeChanged: (DateTime newDate) {
+                  tempDate = newDate;
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _selectTime() async {
+    DateTime tempTime = _selectedDateTime;
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: 300,
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: Colors.grey.withValues(alpha: 0.3),
+                    width: 0.5,
+                  ),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      'Cancelar',
+                      style: TextStyle(color: Colors.grey, fontSize: 16),
+                    ),
+                  ),
+                  const Text(
+                    'Selecionar Hora',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _selectedDateTime = DateTime(
+                          _selectedDateTime.year,
+                          _selectedDateTime.month,
+                          _selectedDateTime.day,
+                          tempTime.hour,
+                          tempTime.minute,
+                        );
+                      });
+                      Navigator.pop(context);
+                    },
+                    child: const Text(
+                      'Confirmar',
+                      style: TextStyle(
+                          color: Colors.blue,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.time,
+                initialDateTime: _selectedDateTime,
+                use24hFormat: true,
+                onDateTimeChanged: (DateTime newTime) {
+                  tempTime = newTime;
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  // lib/screens/add_reminder.dart - PARTE 2
 
   Future<void> _addNewCategory() async {
     final categoryName = _newCategoryController.text.trim();
@@ -401,7 +422,8 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
     setState(() => _isCreatingCategory = true);
 
     try {
-      final colorHex = _selectedNewCategoryColor.toARGB32()
+      final colorHex = _selectedNewCategoryColor
+          .toARGB32()
           .toRadixString(16)
           .padLeft(8, '0')
           .substring(2);
@@ -433,8 +455,10 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
       return;
     }
 
-    if (_selectedCategory.isEmpty || !_normalizedCategoryNames.contains(_selectedCategory)) {
-      _showMessage('Por favor, selecione ou adicione uma categoria válida.', Colors.orange);
+    if (_selectedCategory.isEmpty ||
+        !_normalizedCategoryNames.contains(_selectedCategory)) {
+      _showMessage('Por favor, selecione ou adicione uma categoria válida.',
+          Colors.orange);
       return;
     }
 
@@ -453,7 +477,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
 
       if (_selectedRecurrenceType != 'none') {
         isRecurring = true;
-        
+
         if (_selectedRecurrenceType == 'custom') {
           switch (_customUnit) {
             case 'days':
@@ -479,12 +503,14 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
         description: _descriptionController.text.trim(),
         category: _selectedCategory,
         dateTime: _selectedDateTime,
-        createdAt: _isEditing ? widget.reminderToEdit!.createdAt : DateTime.now(),
+        createdAt:
+            _isEditing ? widget.reminderToEdit!.createdAt : DateTime.now(),
         isCompleted: _isEditing ? widget.reminderToEdit!.isCompleted : false,
         isRecurring: isRecurring,
         recurringType: isRecurring ? finalRecurringType : null,
         recurrenceInterval: finalInterval,
-        notificationsEnabled: _isEditing ? widget.reminderToEdit!.notificationsEnabled : true,
+        notificationsEnabled:
+            _isEditing ? widget.reminderToEdit!.notificationsEnabled : true,
         isChecklist: _isChecklist,
         checklistItems: _isChecklist ? _checklistItems : null,
       );
@@ -499,7 +525,7 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
 
       if (savedId != null) {
         await NotificationService.cancelNotification(savedId);
-        
+
         if (reminder.notificationsEnabled && !reminder.isCompleted) {
           await NotificationService.scheduleReminderNotifications(reminder);
         }
@@ -507,13 +533,13 @@ class _AddReminderScreenState extends State<AddReminderScreen> {
 
 // pix
 
-if (mounted) {
-  // 1. PRIMEIRO: Fazer o pop e voltar para a tela de lembretes
-  Navigator.pop(context, true);
-  
-  // 2. DEPOIS: Trigger do PIX (sem await para não bloquear)
-  _triggerPixSuggestion();
-}
+      if (mounted) {
+        // 1. PRIMEIRO: Fazer o pop e voltar para a tela de lembretes
+        Navigator.pop(context, true);
+
+        // 2. DEPOIS: Trigger do PIX (sem await para não bloquear)
+        _triggerPixSuggestion();
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -522,42 +548,39 @@ if (mounted) {
     }
   }
 
-// ✅ CORRIGIR a função _triggerPixSuggestion() no add_reminder.dart:
+  Future<void> _triggerPixSuggestion() async {
+    if (_isEditing) return;
 
-// ✅ CORRIGIR a função _triggerPixSuggestion no add_reminder.dart:
+    try {
+      // Delay menor para não bloquear o pop
+      await Future.delayed(const Duration(milliseconds: 200));
 
-Future<void> _triggerPixSuggestion() async {
-  if (_isEditing) return;
-  
-  try {
-    // Delay menor para não bloquear o pop
-    await Future.delayed(const Duration(milliseconds: 200));
-    
-    final pixService = PixSuggestionService();
-    await pixService.init();
-    await pixService.registerPositiveAction();
-    
-    final shouldSuggest = await pixService.shouldSuggestPix();
-    
-    if (shouldSuggest && mounted) {
-      await pixService.registerSuggestionShown();
-      
-      showDialog(
-        context: context,
-        builder: (context) => PixSuggestionDialog(
-          onSupported: () {
-            pixService.registerUserSupported();
-          },
-          onDeclined: () {
-            pixService.registerUserDeclined();
-          },
-        ),
-      );
+      final pixService = PixSuggestionService();
+      await pixService.init();
+      await pixService.registerPositiveAction();
+
+      final shouldSuggest = await pixService.shouldSuggestPix();
+
+      if (shouldSuggest && mounted) {
+        await pixService.registerSuggestionShown();
+
+        showDialog(
+          context: context,
+          builder: (context) => PixSuggestionDialog(
+            onSupported: () {
+              pixService.registerUserSupported();
+            },
+            onDeclined: () {
+              pixService.registerUserDeclined();
+            },
+          ),
+        );
+      }
+    } catch (e) {
+      // Falha silenciosa
     }
-  } catch (e) {
-    // Falha silenciosa
   }
-}
+
   void _showMessage(String message, Color color) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -578,13 +601,15 @@ Future<void> _triggerPixSuggestion() async {
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEditing ? 'Editar Lembrete' : 'Novo Lembrete'),
-        backgroundColor: isDark ? colorScheme.surfaceContainerHighest : colorScheme.primary,
+        backgroundColor:
+            isDark ? colorScheme.surfaceContainerHighest : colorScheme.primary,
         foregroundColor: isDark ? colorScheme.onSurface : colorScheme.onPrimary,
       ),
       body: _isSaving
           ? const Center(child: CircularProgressIndicator())
           : _buildMainContent(),
-      backgroundColor: isDark ? colorScheme.surface : colorScheme.surfaceContainerLowest,
+      backgroundColor:
+          isDark ? colorScheme.surface : colorScheme.surfaceContainerLowest,
     );
   }
 
@@ -639,7 +664,8 @@ Future<void> _triggerPixSuggestion() async {
                   border: InputBorder.none,
                   counterText: '',
                 ),
-                style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+                style:
+                    TextStyle(color: Theme.of(context).colorScheme.onSurface),
               ),
             ),
             const SizedBox(height: 16),
@@ -711,15 +737,16 @@ Future<void> _triggerPixSuggestion() async {
                     });
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 12, horizontal: 16),
                     decoration: BoxDecoration(
-                      color: !_isChecklist 
-                          ? colorScheme.primary 
+                      color: !_isChecklist
+                          ? colorScheme.primary
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: !_isChecklist 
-                            ? colorScheme.primary 
+                        color: !_isChecklist
+                            ? colorScheme.primary
                             : colorScheme.outline,
                       ),
                     ),
@@ -728,8 +755,8 @@ Future<void> _triggerPixSuggestion() async {
                       children: [
                         Icon(
                           Icons.notifications,
-                          color: !_isChecklist 
-                              ? colorScheme.onPrimary 
+                          color: !_isChecklist
+                              ? colorScheme.onPrimary
                               : colorScheme.onSurface,
                           size: 20,
                         ),
@@ -737,8 +764,8 @@ Future<void> _triggerPixSuggestion() async {
                         Text(
                           'Lembrete',
                           style: TextStyle(
-                            color: !_isChecklist 
-                                ? colorScheme.onPrimary 
+                            color: !_isChecklist
+                                ? colorScheme.onPrimary
                                 : colorScheme.onSurface,
                             fontWeight: FontWeight.w500,
                           ),
@@ -760,15 +787,16 @@ Future<void> _triggerPixSuggestion() async {
                     });
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 12, horizontal: 16),
                     decoration: BoxDecoration(
-                      color: _isChecklist 
-                          ? colorScheme.primary 
+                      color: _isChecklist
+                          ? colorScheme.primary
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: _isChecklist 
-                            ? colorScheme.primary 
+                        color: _isChecklist
+                            ? colorScheme.primary
                             : colorScheme.outline,
                       ),
                     ),
@@ -777,8 +805,8 @@ Future<void> _triggerPixSuggestion() async {
                       children: [
                         Icon(
                           Icons.checklist,
-                          color: _isChecklist 
-                              ? colorScheme.onPrimary 
+                          color: _isChecklist
+                              ? colorScheme.onPrimary
                               : colorScheme.onSurface,
                           size: 20,
                         ),
@@ -786,8 +814,8 @@ Future<void> _triggerPixSuggestion() async {
                         Text(
                           'Checklist',
                           style: TextStyle(
-                            color: _isChecklist 
-                                ? colorScheme.onPrimary 
+                            color: _isChecklist
+                                ? colorScheme.onPrimary
                                 : colorScheme.onSurface,
                             fontWeight: FontWeight.w500,
                           ),
@@ -858,7 +886,8 @@ Future<void> _triggerPixSuggestion() async {
               width: double.infinity,
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                color:
+                    colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
                   color: colorScheme.outline.withValues(alpha: 0.3),
@@ -911,7 +940,8 @@ Future<void> _triggerPixSuggestion() async {
                     ),
                   ),
                   child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     leading: GestureDetector(
                       onTap: () => _toggleChecklistItem(index),
                       child: Container(
@@ -920,13 +950,13 @@ Future<void> _triggerPixSuggestion() async {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: item.isCompleted 
-                                ? Colors.green 
+                            color: item.isCompleted
+                                ? Colors.green
                                 : colorScheme.outline,
                             width: 2,
                           ),
-                          color: item.isCompleted 
-                              ? Colors.green 
+                          color: item.isCompleted
+                              ? Colors.green
                               : Colors.transparent,
                         ),
                         child: item.isCompleted
@@ -941,11 +971,11 @@ Future<void> _triggerPixSuggestion() async {
                     title: TextFormField(
                       initialValue: item.text,
                       style: TextStyle(
-                        decoration: item.isCompleted 
-                            ? TextDecoration.lineThrough 
+                        decoration: item.isCompleted
+                            ? TextDecoration.lineThrough
                             : null,
-                        color: item.isCompleted 
-                            ? colorScheme.onSurfaceVariant 
+                        color: item.isCompleted
+                            ? colorScheme.onSurfaceVariant
                             : colorScheme.onSurface,
                       ),
                       decoration: const InputDecoration(
@@ -1120,7 +1150,8 @@ Future<void> _triggerPixSuggestion() async {
                     decoration: const InputDecoration(
                       labelText: 'A cada',
                       border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     ),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
@@ -1155,7 +1186,8 @@ Future<void> _triggerPixSuggestion() async {
                     value: _customUnit,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     ),
                     items: _customUnits.map((unit) {
                       return DropdownMenuItem(
@@ -1199,23 +1231,30 @@ Future<void> _triggerPixSuggestion() async {
 
   String _getCustomRecurrencePreview() {
     if (_selectedRecurrenceType != 'custom') return '';
-    
+
     final interval = _customInterval;
     final unit = _customUnit;
-    
+
     if (interval == 1) {
       switch (unit) {
-        case 'days': return 'Repetir todos os dias';
-        case 'weeks': return 'Repetir toda semana';
-        case 'months': return 'Repetir todo mês';
+        case 'days':
+          return 'Repetir todos os dias';
+        case 'weeks':
+          return 'Repetir toda semana';
+        case 'months':
+          return 'Repetir todo mês';
       }
     }
-    
+
     switch (unit) {
-      case 'days': return 'Repetir a cada $interval dias';
-      case 'weeks': return 'Repetir a cada $interval semanas';
-      case 'months': return 'Repetir a cada $interval meses';
-      default: return '';
+      case 'days':
+        return 'Repetir a cada $interval dias';
+      case 'weeks':
+        return 'Repetir a cada $interval semanas';
+      case 'months':
+        return 'Repetir a cada $interval meses';
+      default:
+        return '';
     }
   }
 
@@ -1308,7 +1347,8 @@ Future<void> _triggerPixSuggestion() async {
                 icon: const Icon(Icons.add, size: 16),
                 label: const Text('Nova'),
                 style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   textStyle: const TextStyle(fontSize: 12),
                 ),
               ),
@@ -1326,7 +1366,9 @@ Future<void> _triggerPixSuggestion() async {
 
   Widget _buildCategoryDropdown() {
     return DropdownButtonFormField<String>(
-      value: _normalizedCategoryNames.contains(_selectedCategory) ? _selectedCategory : null,
+      value: _normalizedCategoryNames.contains(_selectedCategory)
+          ? _selectedCategory
+          : null,
       decoration: const InputDecoration(
         border: OutlineInputBorder(),
         contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1361,240 +1403,244 @@ Future<void> _triggerPixSuggestion() async {
         }
       },
       validator: (value) {
-         if (value == null || value.isEmpty || !_normalizedCategoryNames.contains(value)) {
-           return 'Selecione uma categoria válida';
-         }
-         return null;
+        if (value == null ||
+            value.isEmpty ||
+            !_normalizedCategoryNames.contains(value)) {
+          return 'Selecione uma categoria válida';
+        }
+        return null;
       },
-   );
- }
+    );
+  }
 
- Widget _buildDateCard() {
-   final theme = Theme.of(context);
-   final colorScheme = theme.colorScheme;
-   final isDark = theme.brightness == Brightness.dark;
+  Widget _buildDateCard() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
-   return Container(
-     padding: const EdgeInsets.all(16),
-     decoration: BoxDecoration(
-       color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
-       borderRadius: BorderRadius.circular(12),
-       boxShadow: [
-         BoxShadow(
-           color: theme.shadowColor.withValues(alpha: 0.1),
-           blurRadius: 8,
-           offset: const Offset(0, 2),
-         ),
-       ],
-     ),
-     child: Row(
-       children: [
-         Icon(Icons.calendar_today, color: colorScheme.primary, size: 20),
-         const SizedBox(width: 8),
-         Text(
-           'Data',
-           style: TextStyle(
-             fontWeight: FontWeight.bold,
-             color: colorScheme.onSurface,
-             fontSize: 14,
-           ),
-         ),
-         const Spacer(),
-         InkWell(
-           onTap: _selectDate,
-           borderRadius: BorderRadius.circular(8),
-           child: Container(
-             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-             decoration: BoxDecoration(
-               color: colorScheme.primaryContainer,
-               borderRadius: BorderRadius.circular(8),
-             ),
-             child: Text(
-               DateFormat('dd/MM/yyyy').format(_selectedDateTime),
-               style: TextStyle(
-                 color: colorScheme.onPrimaryContainer,
-                 fontWeight: FontWeight.w600,
-                 fontSize: 14,
-               ),
-             ),
-           ),
-         ),
-       ],
-     ),
-   );
- }
-
- Widget _buildTimeCard() {
-   final theme = Theme.of(context);
-   final colorScheme = theme.colorScheme;
-   final isDark = theme.brightness == Brightness.dark;
-
-   return Container(
-     padding: const EdgeInsets.all(16),
-     decoration: BoxDecoration(
-       color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
-       borderRadius: BorderRadius.circular(12),
-       boxShadow: [
-        BoxShadow(
-          color: theme.shadowColor.withValues(alpha: 0.1),
-          blurRadius: 8,
-          offset: const Offset(0, 2),
-        ),
-      ],
-    ),
-    child: Row(
-      children: [
-        Icon(Icons.access_time, color: colorScheme.primary, size: 20),
-        const SizedBox(width: 8),
-        Text(
-          'Hora',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: colorScheme.onSurface,
-            fontSize: 14,
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: theme.shadowColor.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-        ),
-        const Spacer(),
-        InkWell(
-          onTap: _selectTime,
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(8),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.calendar_today, color: colorScheme.primary, size: 20),
+          const SizedBox(width: 8),
+          Text(
+            'Data',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: colorScheme.onSurface,
+              fontSize: 14,
             ),
-            child: Text(
-              DateFormat('HH:mm').format(_selectedDateTime),
-              style: TextStyle(
-                color: colorScheme.onPrimaryContainer,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
+          ),
+          const Spacer(),
+          InkWell(
+            onTap: _selectDate,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                DateFormat('dd/MM/yyyy').format(_selectedDateTime),
+                style: TextStyle(
+                  color: colorScheme.onPrimaryContainer,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
               ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 
-Widget _buildSaveButton() {
-  return SizedBox(
-    width: double.infinity,
-    height: 50,
-    child: ElevatedButton(
-      onPressed: _saveReminder,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+  Widget _buildTimeCard() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? colorScheme.surfaceContainerHigh : theme.cardColor,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: theme.shadowColor.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.access_time, color: colorScheme.primary, size: 20),
+          const SizedBox(width: 8),
+          Text(
+            'Hora',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: colorScheme.onSurface,
+              fontSize: 14,
+            ),
+          ),
+          const Spacer(),
+          InkWell(
+            onTap: _selectTime,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                DateFormat('HH:mm').format(_selectedDateTime),
+                style: TextStyle(
+                  color: colorScheme.onPrimaryContainer,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSaveButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: ElevatedButton(
+        onPressed: _saveReminder,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.blue,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: Text(
+          _isEditing
+              ? (_isChecklist ? 'Atualizar Checklist' : 'Atualizar Lembrete')
+              : (_isChecklist ? 'Salvar Checklist' : 'Salvar Lembrete'),
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
-      child: Text(
-        _isEditing 
-            ? (_isChecklist ? 'Atualizar Checklist' : 'Atualizar Lembrete')
-            : (_isChecklist ? 'Salvar Checklist' : 'Salvar Lembrete'),
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
+    );
+  }
+
+  void _showAddCategoryDialog() {
+    Color tempSelectedColor = _selectedNewCategoryColor;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Nova Categoria'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _newCategoryController,
+                decoration: const InputDecoration(
+                  labelText: 'Nome da categoria',
+                  border: OutlineInputBorder(),
+                ),
+                maxLength: 50,
+              ),
+              const SizedBox(height: 16),
+              const Text('Escolha uma cor:'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _predefinedColors.map((color) {
+                  final isSelected = tempSelectedColor == color;
+                  return GestureDetector(
+                    onTap: () {
+                      setDialogState(() {
+                        tempSelectedColor = color;
+                      });
+                    },
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isSelected ? Colors.black : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                      child: isSelected
+                          ? const Icon(
+                              Icons.check,
+                              color: Colors.white,
+                              size: 16,
+                            )
+                          : null,
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: _isCreatingCategory
+                  ? null
+                  : () {
+                      setState(() {
+                        _selectedNewCategoryColor = tempSelectedColor;
+                      });
+                      _addNewCategory();
+                    },
+              child: _isCreatingCategory
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Adicionar'),
+            ),
+          ],
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
-void _showAddCategoryDialog() {
- Color tempSelectedColor = _selectedNewCategoryColor;
- 
- showDialog(
-   context: context,
-   builder: (context) => StatefulBuilder(
-     builder: (context, setDialogState) => AlertDialog(
-       title: const Text('Nova Categoria'),
-       content: Column(
-         mainAxisSize: MainAxisSize.min,
-         children: [
-           TextFormField(
-             controller: _newCategoryController,
-             decoration: const InputDecoration(
-               labelText: 'Nome da categoria',
-               border: OutlineInputBorder(),
-             ),
-             maxLength: 50,
-           ),
-           const SizedBox(height: 16),
-           const Text('Escolha uma cor:'),
-           const SizedBox(height: 8),
-           Wrap(
-             spacing: 8,
-             runSpacing: 8,
-             children: _predefinedColors.map((color) {
-               final isSelected = tempSelectedColor == color;
-               return GestureDetector(
-                 onTap: () {
-                   setDialogState(() {
-                     tempSelectedColor = color;
-                   });
-                 },
-                 child: Container(
-                   width: 32,
-                   height: 32,
-                   decoration: BoxDecoration(
-                     color: color,
-                     shape: BoxShape.circle,
-                     border: Border.all(
-                       color: isSelected ? Colors.black : Colors.transparent,
-                       width: 2,
-                     ),
-                   ),
-                   child: isSelected
-                       ? const Icon(
-                           Icons.check,
-                           color: Colors.white,
-                           size: 16,
-                         )
-                       : null,
-                 ),
-               );
-             }).toList(),
-           ),
-         ],
-       ),
-       actions: [
-         TextButton(
-           onPressed: () => Navigator.pop(context),
-           child: const Text('Cancelar'),
-         ),
-         ElevatedButton(
-           onPressed: _isCreatingCategory ? null : () {
-             setState(() {
-               _selectedNewCategoryColor = tempSelectedColor;
-             });
-             _addNewCategory();
-           },
-           child: _isCreatingCategory
-               ? const SizedBox(
-                   width: 20,
-                   height: 20,
-                   child: CircularProgressIndicator(strokeWidth: 2),
-                 )
-               : const Text('Adicionar'),
-         ),
-       ],
-     ),
-   ),
- );
-}
-
-@override
-void dispose() {
-  _titleController.dispose();
-  _descriptionController.dispose();
-  _newCategoryController.dispose();
-  _customIntervalController.dispose();
-  _newItemController.dispose();
-  super.dispose();
-}
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _newCategoryController.dispose();
+    _customIntervalController.dispose();
+    _newItemController.dispose();
+    super.dispose();
+  }
 }
