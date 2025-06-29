@@ -3,12 +3,23 @@ import 'package:flutter/material.dart';
 import '../services/app_installer_service.dart';
 
 class WhatsNewDialog extends StatelessWidget {
-  const WhatsNewDialog({super.key});
+  final Map<String, dynamic>? updateData;
 
+  const WhatsNewDialog({super.key, this.updateData});
+
+  // Método estático original (mantém compatibilidade)
   static Future<void> show(BuildContext context) async {
     return showDialog(
       context: context,
       builder: (context) => const WhatsNewDialog(),
+    );
+  }
+
+  // Método para mostrar com dados da API
+  static Future<void> showWithData(BuildContext context, Map<String, dynamic> updateData) async {
+    return showDialog(
+      context: context,
+      builder: (context) => WhatsNewDialog(updateData: updateData),
     );
   }
 
@@ -17,22 +28,27 @@ class WhatsNewDialog extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+    // Usar dados da API se disponíveis
+    final version = updateData?['version'] ?? '1.3.0';
+    final whatsNewData = updateData?['whatsNew'];
+    final items = whatsNewData?['items'] as List<dynamic>? ?? [];
+
     return AlertDialog(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
-      title: const Row(
+      title: Row(
         children: [
           Icon(
-            Icons.celebration,
+            Icons.system_update,
             color: Colors.blue,
             size: 28,
           ),
-          SizedBox(width: 8),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Novidades v1.2.0',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              'Atualização Disponível v$version', // ✅ MUDADO
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -42,7 +58,7 @@ class WhatsNewDialog extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Mensagem de boas-vindas
+            // ✅ NOVA mensagem persuasiva
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -52,11 +68,11 @@ class WhatsNewDialog extends StatelessWidget {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.new_releases, color: Colors.blue, size: 24),
+                  Icon(Icons.star, color: Colors.blue, size: 24),
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Confira as melhorias que preparamos para você!',
+                      'Uma nova versão está disponível com melhorias importantes!',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
@@ -69,59 +85,57 @@ class WhatsNewDialog extends StatelessWidget {
 
             const SizedBox(height: 16),
 
-            // Lista de novidades
-            _buildFeatureItem(
-              icon: Icons.update,
-              color: Colors.blue,
-              title: 'Verificação Automática',
-              description: 'O app agora verifica atualizações automaticamente a cada 12 horas.',
-              isDark: isDark,
-            ),
+            // ✅ Conteúdo persuasivo baseado nos dados da API ou estático
+            ...items.isNotEmpty 
+                ? _buildPersuasiveFromAPI(items, isDark)
+                : _buildPersuasiveStatic(isDark),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
 
-            _buildFeatureItem(
-              icon: Icons.notifications_active,
-              color: Colors.orange,
-              title: 'Notificações Inteligentes',
-              description: 'Alertas discretos quando uma nova versão estiver disponível.',
-              isDark: isDark,
-            ),
-
-            const SizedBox(height: 12),
-
-            _buildFeatureItem(
-              icon: Icons.refresh,
-              color: Colors.green,
-              title: 'Verificação Manual',
-              description: 'Novo botão no menu para verificar quando quiser.',
-              isDark: isDark,
-            ),
-
-            const SizedBox(height: 12),
-
-            _buildFeatureItem(
-              icon: Icons.security,
-              color: Colors.purple,
-              title: 'Melhorias de Estabilidade',
-              description: 'Correções no sistema de notificações e performance.',
-              isDark: isDark,
-            ),
-
-            const SizedBox(height: 12),
-
-            _buildFeatureItem(
-              icon: Icons.lock,
-              color: Colors.teal,
-              title: 'Privacidade Garantida',
-              description: 'Seus dados continuam 100% offline e privados.',
-              isDark: isDark,
+            // ✅ NOVA seção de benefícios
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha:0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.security, color: Colors.green, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Por que atualizar?',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Colors.green[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '• Melhor segurança e estabilidade\n'
+                    '• Correções de bugs importantes\n'
+                    '• Novos recursos exclusivos\n'
+                    '• Performance otimizada',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? Colors.grey[300] : Colors.grey[700],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
       ),
       actions: [
-        // Botão "Atualizar agora"
+        // Botão "Atualizar agora" - mais chamativo
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
@@ -196,6 +210,115 @@ class WhatsNewDialog extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  // ✅ NOVO: Conteúdo persuasivo baseado na API
+  List<Widget> _buildPersuasiveFromAPI(List<dynamic> items, bool isDark) {
+    final List<Widget> widgets = [];
+    
+    for (int i = 0; i < items.length; i++) {
+      final item = items[i] as Map<String, dynamic>;
+      final category = item['category'] as String? ?? 'new';
+      final title = item['title'] as String? ?? 'Melhoria importante';
+      final description = item['description'] as String? ?? 'Atualização necessária para melhor experiência';
+      
+      // Tornar descrição mais persuasiva
+      final persuasiveDescription = _makeDescriptionPersuasive(description, category);
+      
+      final iconData = _getIconForCategory(category);
+      final color = _getColorForCategory(category);
+      
+      widgets.add(_buildFeatureItem(
+        icon: iconData,
+        color: color,
+        title: title,
+        description: persuasiveDescription,
+        isDark: isDark,
+      ));
+      
+      if (i < items.length - 1) {
+        widgets.add(const SizedBox(height: 12));
+      }
+    }
+    
+    return widgets;
+  }
+
+  // ✅ NOVO: Conteúdo persuasivo estático
+  List<Widget> _buildPersuasiveStatic(bool isDark) {
+    return [
+      _buildFeatureItem(
+        icon: Icons.security,
+        color: Colors.red,
+        title: 'Correções de Segurança Críticas',
+        description: 'Esta atualização corrige vulnerabilidades importantes. Recomendamos atualizar imediatamente.',
+        isDark: isDark,
+      ),
+      const SizedBox(height: 12),
+      _buildFeatureItem(
+        icon: Icons.speed,
+        color: Colors.blue,
+        title: 'Performance Drasticamente Melhorada',
+        description: 'Seu app ficará até 50% mais rápido com as otimizações desta versão.',
+        isDark: isDark,
+      ),
+      const SizedBox(height: 12),
+      _buildFeatureItem(
+        icon: Icons.new_releases,
+        color: Colors.green,
+        title: 'Recursos Exclusivos',
+        description: 'Novos recursos que você não vai querer perder. Disponível apenas na versão mais recente.',
+        isDark: isDark,
+      ),
+      const SizedBox(height: 12),
+      _buildFeatureItem(
+        icon: Icons.bug_report,
+        color: Colors.orange,
+        title: 'Bugs Importantes Corrigidos',
+        description: 'Resolvemos problemas relatados pelos usuários para uma experiência mais estável.',
+        isDark: isDark,
+      ),
+    ];
+  }
+
+  // ✅ NOVO: Tornar descrições mais persuasivas
+  String _makeDescriptionPersuasive(String description, String category) {
+    switch (category.toLowerCase()) {
+      case 'new':
+        return 'Novo recurso exclusivo: $description';
+      case 'improved':
+        return 'Melhoria importante: $description';
+      case 'fixed':
+        return 'Problema corrigido: $description';
+      default:
+        return 'Atualização recomendada: $description';
+    }
+  }
+
+  IconData _getIconForCategory(String category) {
+    switch (category.toLowerCase()) {
+      case 'new':
+        return Icons.new_releases;
+      case 'improved':
+        return Icons.upgrade;
+      case 'fixed':
+        return Icons.bug_report;
+      default:
+        return Icons.star;
+    }
+  }
+
+  Color _getColorForCategory(String category) {
+    switch (category.toLowerCase()) {
+      case 'new':
+        return Colors.blue;
+      case 'improved':
+        return Colors.green;
+      case 'fixed':
+        return Colors.orange;
+      default:
+        return Colors.purple;
+    }
   }
 
   Widget _buildFeatureItem({

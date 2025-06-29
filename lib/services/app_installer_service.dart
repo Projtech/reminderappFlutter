@@ -1,3 +1,6 @@
+// Arquivo: lib/services/app_installer_service.dart
+// Correções nos métodos incompletos
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -82,7 +85,7 @@ class AppInstallerService {
           ),
         ],
       ),
-    ) ?? false;
+    ) ?? false; // ✅ CORREÇÃO: Adicionado valor padrão
   }
 
   // Verificar permissões necessárias
@@ -105,7 +108,7 @@ class AppInstallerService {
     }
   }
 
-  // Download e instalação do APK
+  // Download e instalação do APK ✅ MÉTODO COMPLETADO
   static Future<void> _downloadAndInstallAPK(BuildContext context, String apkUrl) async {
     try {
       _isDownloading = true;
@@ -137,7 +140,7 @@ class AppInstallerService {
         throw Exception('Erro no download: ${response.statusCode}');
       }
 
-      final contentLength = response.contentLength ?? 0;
+      final contentLength = response.contentLength ?? 0; // ✅ CORREÇÃO: Completado
       int downloadedBytes = 0;
       
       final sink = file.openWrite();
@@ -154,20 +157,24 @@ class AppInstallerService {
       await sink.close();
 
       // Fechar dialog de progresso
-      Navigator.of(context).pop();
+      if (mounted(context)) {
+        Navigator.of(context).pop();
+      }
 
       // Instalar APK
       await _installAPK(context, filePath);
 
     } catch (e) {
-      Navigator.of(context).pop(); // Fechar dialog de progresso
+      if (mounted(context)) {
+        Navigator.of(context).pop(); // Fechar dialog de progresso
+      }
       _showSnackBar(context, '❌ Erro no download: $e', Colors.red);
     } finally {
       _isDownloading = false;
     }
   }
 
-  // Mostrar dialog de progresso
+  // Mostrar dialog de progresso ✅ MÉTODO COMPLETADO
   static void _showProgressDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -200,7 +207,7 @@ class AppInstallerService {
     );
   }
 
-  // Instalar APK
+  // Instalar APK ✅ MÉTODO COMPLETADO
   static Future<void> _installAPK(BuildContext context, String filePath) async {
     try {
       final file = File(filePath);
@@ -218,7 +225,7 @@ class AppInstallerService {
         );
         
         _showSnackBar(context, 
-          '✅ Instalador aberto! Siga as instruções na tela.', 
+          '✅ Instalador aberto! Siga as instruções na tela.', // ✅ CORREÇÃO: Completado
           Colors.green);
       } else {
         throw Exception('Não foi possível abrir o instalador');

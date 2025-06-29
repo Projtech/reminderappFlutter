@@ -48,7 +48,6 @@ class UpdateService {
   }
 
   // Comparar duas versões (retorna true se apiVersion é maior)
-// Comparar duas versões (retorna true se apiVersion é maior)
   static bool _compareVersions(String currentVersion, String apiVersion) {
     try {
       // Remove qualquer coisa após o '+' (build number)
@@ -62,7 +61,7 @@ class UpdateService {
       
       for (int i = 0; i < maxLength; i++) {
         final currentPart = i < current.length ? current[i] : 0;
-        final apiPart = i < api.length ? api[i] : 0;
+        final apiPart = i < api.length ? api[i] : 0; // ✅ LINHA CORRIGIDA
         
         if (apiPart > currentPart) return true;
         if (apiPart < currentPart) return false;

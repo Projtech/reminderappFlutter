@@ -14,6 +14,7 @@ import '../screens/privacy_screen.dart';
 import '../screens/privacy_settings_screen.dart';
 import '../services/update_service.dart';
 import '../services/timer_service.dart';
+import '../widgets/whats_new_dialog.dart'; // ✅ ADICIONADO
 
 class UnifiedDrawer extends StatefulWidget {
 final String currentScreen;
@@ -420,6 +421,8 @@ try {
 }
 }
 
+// ✅ MÉTODO CORRIGIDO
+// ✅ MÉTODO CORRIGIDO - Substitua apenas este método
 Future<void> _checkForUpdates() async {
  setState(() => _isCheckingUpdates = true);
  await TimerService.checkNow();
@@ -429,26 +432,8 @@ Future<void> _checkForUpdates() async {
    
    if (mounted) {
      if (updateInfo != null) {
-       final version = updateInfo['version'];
-       ScaffoldMessenger.of(context).showSnackBar(
-         SnackBar(
-           content: Text('🎉 Nova versão $version disponível!'),
-           backgroundColor: Colors.green,
-           action: SnackBarAction(
-             label: 'Ver novidades',
-             textColor: Colors.white,
-             onPressed: () {
-               // Futuramente vai abrir tela WhatsNew
-               ScaffoldMessenger.of(context).showSnackBar(
-                 const SnackBar(
-                   content: Text('Tela de novidades será implementada'),
-                   backgroundColor: Colors.blue,
-                 ),
-               );
-             },
-           ),
-         ),
-       );
+       // ✅ CORREÇÃO: Abrir WhatsNewDialog automaticamente com dados da API
+       await WhatsNewDialog.showWithData(context, updateInfo);
      } else {
        ScaffoldMessenger.of(context).showSnackBar(
          const SnackBar(

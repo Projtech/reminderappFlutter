@@ -1,3 +1,6 @@
+// Arquivo: lib/utils/app_info.dart
+// Correção da URL de download
+
 class AppInfo {
   static const String appName = 'Seus Lembretes';
   static const String version = '1.2.0+2';
@@ -9,8 +12,9 @@ class AppInfo {
   static const String pixKey = 'projtechgestaoetecnologia@gmail.com';
   static const String contactEmail = 'projtechgestaoetecnologia@gmail.com';
 
-  // Para futuro uso
-  static const String downloadUrl = 'https://seusite.com/download';
+  // URLs do sistema - ✅ CORRIGIDO
+  static const String downloadUrl = 'https://seuslembretes.vercel.app';
+  static const String websiteUrl = 'https://seuslembretes.vercel.app';
 
   // LGPD e privacidade
   static const String dataRetentionPeriod = '2 anos';
