@@ -1,138 +1,159 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-   
-   <!-- PERMISSÃO DE INTERNET - CRÍTICA PARA SUPABASE -->
-   <uses-permission android:name="android.permission.INTERNET"/>
-   
-   <!-- PERMISSÕES PARA NOTIFICAÇÕES E ALARMES -->
-   <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-   <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-   <uses-permission android:name="android.permission.WAKE_LOCK" />
-   <uses-permission android:name="android.permission.VIBRATE" />
-   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
-   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-   
-   <!-- PERMISSÕES CRÍTICAS PARA BACKGROUND EXECUTION -->
-   <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-   <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
-   <uses-permission android:name="android.permission.TURN_SCREEN_ON" />
-   
-   <!-- NOVAS PERMISSÕES PARA HEADS-UP FORÇADO -->
-   <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
-   <uses-permission android:name="android.permission.APPEAR_ON_TOP" />
-   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-   
-   <application
-       android:label="Seus Lembretes"
-       android:name="${applicationName}"
-       android:icon="@mipmap/ic_launcher"
-       android:enableOnBackInvokedCallback="true"
-       android:allowBackup="false"
-       android:fullBackupContent="false"
-       android:usesCleartextTraffic="true">
-       <activity
-           android:name=".MainActivity"
-           android:exported="true"
-           android:launchMode="singleTop"
-           android:taskAffinity=""
-           android:theme="@style/LaunchTheme"
-           android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-           android:hardwareAccelerated="true"
-           android:windowSoftInputMode="adjustResize"
-           android:excludeFromRecents="false">
-           
-           <meta-data
-             android:name="io.flutter.embedding.android.NormalTheme"
-             android:resource="@style/NormalTheme"
-             />
-           <intent-filter>
-               <action android:name="android.intent.action.MAIN"/>
-               <category android:name="android.intent.category.LAUNCHER"/>
-           </intent-filter>
-           
-           <intent-filter>
-               <action android:name="FLUTTER_NOTIFICATION_CLICK" />
-               <category android:name="android.intent.category.DEFAULT" />
-           </intent-filter>
-       </activity>
-       
-       <!-- RECEIVERS COM PRIORIDADE MÁXIMA PARA BACKGROUND -->
-       <receiver 
-           android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
-           android:exported="false"
-           android:enabled="true"
-           android:directBootAware="true">
-           <intent-filter android:priority="2147483647">
-               <action android:name="android.intent.action.BOOT_COMPLETED"/>
-               <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
-               <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-               <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
-               <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED"/>
-               <category android:name="android.intent.category.DEFAULT" />
-           </intent-filter>
-       </receiver>
-       
-       <receiver 
-           android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" 
-           android:exported="false"
-           android:enabled="true"
-           android:directBootAware="true" />
-           
-       <receiver 
-           android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver" 
-           android:exported="false"
-           android:enabled="true" />
-       
-       <!-- SERVIÇO DE FOREGROUND PARA EXECUÇÃO EM BACKGROUND -->
-       <service
-           android:name="com.dexterous.flutterlocalnotifications.ForegroundService"
-           android:exported="false"
-           android:enabled="true"
-           android:stopWithTask="false"
-           android:foregroundServiceType="specialUse" />
-       
-       <!-- SERVIÇO PARA BACKGROUND SERVICE -->
-       <service
-           android:name="id.flutter.flutter_background_service.BackgroundService"
-           android:exported="false"
-           android:enabled="true"
-           android:stopWithTask="false"
-           android:foregroundServiceType="specialUse">
-           <property 
-               android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-               android:value="Verificação periódica de lembretes agendados" />
-       </service>
-       
-       <!-- META-DATA PARA NOTIFICAÇÕES -->
-       <meta-data
-           android:name="com.dexterous.flutterlocalnotifications.DEFAULT_ICON"
-           android:resource="@mipmap/ic_launcher" />
-       
-       <!-- META-DATA PARA HEADS-UP FORÇADO -->
-       <meta-data
-           android:name="com.dexterous.flutterlocalnotifications.NOTIFICATION_CHANNEL_ID"
-           android:value="heads_up_urgent_channel" />
-       
-       <meta-data
-           android:name="com.dexterous.flutterlocalnotifications.NOTIFICATION_CHANNEL_NAME"
-           android:value="Heads-Up Urgentes" />
-       
-       <meta-data
-           android:name="com.dexterous.flutterlocalnotifications.NOTIFICATION_CHANNEL_DESCRIPTION"
-           android:value="Notificações que aparecem na tela com som e popup" />
-       
-       <meta-data
-           android:name="flutterEmbedding"
-           android:value="2" />
-   </application>
-   
-   <queries>
-       <intent>
-           <action android:name="android.intent.action.PROCESS_TEXT"/>
-           <data android:mimeType="text/plain"/>
-       </intent>
-   </queries>
+  
+  <!-- PERMISSÃO DE INTERNET - CRÍTICA PARA SUPABASE -->
+  <uses-permission android:name="android.permission.INTERNET"/>
+  
+  <!-- PERMISSÕES PARA NOTIFICAÇÕES E ALARMES -->
+  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+  <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <uses-permission android:name="android.permission.VIBRATE" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  
+  <!-- PERMISSÕES CRÍTICAS PARA BACKGROUND EXECUTION -->
+  <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+  <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
+  <uses-permission android:name="android.permission.TURN_SCREEN_ON" />
+  
+  <!-- NOVAS PERMISSÕES PARA HEADS-UP FORÇADO -->
+  <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+  <uses-permission android:name="android.permission.APPEAR_ON_TOP" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+  
+  <!-- ✅ NOVAS PERMISSÕES PARA INSTALAÇÃO DE APK -->
+  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+  <uses-permission android:name="android.permission.INSTALL_PACKAGES" />
+  
+  <application
+      android:label="Seus Lembretes"
+      android:name="${applicationName}"
+      android:icon="@mipmap/ic_launcher"
+      android:enableOnBackInvokedCallback="true"
+      android:allowBackup="false"
+      android:fullBackupContent="false"
+      android:usesCleartextTraffic="true">
+      <activity
+          android:name=".MainActivity"
+          android:exported="true"
+          android:launchMode="singleTop"
+          android:taskAffinity=""
+          android:theme="@style/LaunchTheme"
+          android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+          android:hardwareAccelerated="true"
+          android:windowSoftInputMode="adjustResize"
+          android:excludeFromRecents="false">
+          
+          <meta-data
+            android:name="io.flutter.embedding.android.NormalTheme"
+            android:resource="@style/NormalTheme"
+            />
+          <intent-filter>
+              <action android:name="android.intent.action.MAIN"/>
+              <category android:name="android.intent.category.LAUNCHER"/>
+          </intent-filter>
+          
+          <intent-filter>
+              <action android:name="FLUTTER_NOTIFICATION_CLICK" />
+              <category android:name="android.intent.category.DEFAULT" />
+          </intent-filter>
+          
+          <!-- ✅ NOVO: Intent filter para abrir APKs -->
+          <intent-filter>
+              <action android:name="android.intent.action.VIEW" />
+              <category android:name="android.intent.category.DEFAULT" />
+              <category android:name="android.intent.category.BROWSABLE" />
+              <data android:mimeType="application/vnd.android.package-archive" />
+          </intent-filter>
+      </activity>
+      
+      <!-- RECEIVERS COM PRIORIDADE MÁXIMA PARA BACKGROUND -->
+      <receiver 
+          android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+          android:exported="false"
+          android:enabled="true"
+          android:directBootAware="true">
+          <intent-filter android:priority="2147483647">
+              <action android:name="android.intent.action.BOOT_COMPLETED"/>
+              <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+              <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+              <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+              <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED"/>
+              <category android:name="android.intent.category.DEFAULT" />
+          </intent-filter>
+      </receiver>
+      
+      <receiver 
+          android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" 
+          android:exported="false"
+          android:enabled="true"
+          android:directBootAware="true" />
+          
+      <receiver 
+          android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver" 
+          android:exported="false"
+          android:enabled="true" />
+      
+      <!-- SERVIÇO DE FOREGROUND PARA EXECUÇÃO EM BACKGROUND -->
+      <service
+          android:name="com.dexterous.flutterlocalnotifications.ForegroundService"
+          android:exported="false"
+          android:enabled="true"
+          android:stopWithTask="false"
+          android:foregroundServiceType="specialUse" />
+      
+      <!-- SERVIÇO PARA BACKGROUND SERVICE -->
+      <service
+          android:name="id.flutter.flutter_background_service.BackgroundService"
+          android:exported="false"
+          android:enabled="true"
+          android:stopWithTask="false"
+          android:foregroundServiceType="specialUse">
+          <property 
+              android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+              android:value="Verificação periódica de lembretes agendados" />
+      </service>
+      
+      <!-- META-DATA PARA NOTIFICAÇÕES -->
+      <meta-data
+          android:name="com.dexterous.flutterlocalnotifications.DEFAULT_ICON"
+          android:resource="@mipmap/ic_launcher" />
+      
+      <!-- META-DATA PARA HEADS-UP FORÇADO -->
+      <meta-data
+          android:name="com.dexterous.flutterlocalnotifications.NOTIFICATION_CHANNEL_ID"
+          android:value="heads_up_urgent_channel" />
+      
+      <meta-data
+          android:name="com.dexterous.flutterlocalnotifications.NOTIFICATION_CHANNEL_NAME"
+          android:value="Heads-Up Urgentes" />
+      
+      <meta-data
+          android:name="com.dexterous.flutterlocalnotifications.NOTIFICATION_CHANNEL_DESCRIPTION"
+          android:value="Notificações que aparecem na tela com som e popup" />
+      
+      <meta-data
+          android:name="flutterEmbedding"
+          android:value="2" />
+  </application>
+  
+  <queries>
+      <intent>
+          <action android:name="android.intent.action.PROCESS_TEXT"/>
+          <data android:mimeType="text/plain"/>
+      </intent>
+      <!-- ✅ NOVO: Query para instalação de APKs e navegadores -->
+      <intent>
+          <action android:name="android.intent.action.VIEW" />
+          <data android:scheme="https" />
+      </intent>
+      <intent>
+          <action android:name="android.intent.action.VIEW" />
+          <data android:scheme="http" />
+      </intent>
+  </queries>
 </manifest>

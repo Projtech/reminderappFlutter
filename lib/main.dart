@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
 import 'services/notification_service.dart';
 import 'services/timer_service.dart';
+import 'services/consent_service.dart';
+import 'widgets/whats_new_dialog.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,11 +42,17 @@ class MyApp extends StatefulWidget {
 // ✅ CORREÇÃO 1: Remover underscore para tornar público
 class MyAppState extends State<MyApp> {
   late ThemeMode _themeMode;
+  
+  get navigatorKey => null;
 
   @override
   void initState() {
     super.initState();
     _themeMode = widget.initialThemeMode;
+    // Verificar se deve mostrar "O que há de novo" após o build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkWhatsNewModal();
+    });
   }
 
   Future<void> changeTheme(ThemeMode themeMode) async {
@@ -54,6 +62,37 @@ class MyAppState extends State<MyApp> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
         'theme_mode', themeMode == ThemeMode.dark ? 'dark' : 'light');
+  }
+
+  // Nova função para verificar e mostrar modal "O que há de novo"
+  Future<void> _checkWhatsNewModal() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final consentService = ConsentService();
+      
+      // Verificar se usuário é antigo (já passou pelo LGPD)
+      final hasShownConsent = await consentService.hasShownConsent();
+      
+      // Verificar se deve mostrar modal de novidades
+      final shouldShowWhatsNew = prefs.getBool('show_whats_new_on_open') ?? false;
+      
+      // Só mostrar para usuários antigos que atualizaram
+      if (hasShownConsent && shouldShowWhatsNew) {
+        // Aguardar um pouco para garantir que a UI está pronta
+        await Future.delayed(const Duration(milliseconds: 1000));
+        
+        final context = MyApp.navigatorKey.currentContext;
+        if (context != null && mounted) {
+          // ignore: use_build_context_synchronously
+          await WhatsNewDialog.show(context);
+          
+          // Limpar a flag para não mostrar novamente
+          await prefs.setBool('show_whats_new_on_open', false);
+        }
+      }
+    } catch (e) {
+      // Falha silenciosa
+    }
   }
 
   @override
@@ -85,53 +124,22 @@ class MyAppState extends State<MyApp> {
         secondary: Colors.tealAccent[100],
         surface: const Color(0xFF1E1E1E),
         onPrimary: Colors.black,
-        onSecondary: Colors.black,
-        onSurface: Colors.white,
       ),
       cardTheme: CardThemeData(
-        elevation: 1,
+        elevation: 2,
         margin: const EdgeInsets.symmetric(vertical: 8.0),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      appBarTheme: const AppBarTheme(
-        elevation: 1,
-      ),
-      floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: Colors.blue[300],
-        foregroundColor: Colors.black,
-      ),
-      drawerTheme: const DrawerThemeData(),
-      switchTheme: SwitchThemeData(
-        thumbColor:
-            WidgetStateProperty.resolveWith<Color?>((Set<WidgetState> states) {
-          if (states.contains(WidgetState.selected)) {
-            return Colors.blue[300];
-          }
-          return null;
-        }),
-        trackColor:
-            WidgetStateProperty.resolveWith<Color?>((Set<WidgetState> states) {
-          if (states.contains(WidgetState.selected)) {
-            // ✅ CORREÇÃO 2: Usar withValues em vez de withAlpha
-            return Colors.blue[300]?.withValues(alpha: 0.5); // 128/255 ≈ 0.5
-          }
-          return null;
-        }),
-        trackOutlineColor:
-            WidgetStateProperty.resolveWith<Color?>((Set<WidgetState> states) {
-          if (!states.contains(WidgetState.selected)) {
-            return Colors.grey[600];
-          }
-          return null;
-        }),
       ),
       useMaterial3: true,
     );
 
     return MaterialApp(
-      title: 'Lembretes',
-      navigatorKey: MyApp.navigatorKey,
-      debugShowCheckedModeBanner: false,
+      navigatorKey: navigatorKey,
+      title: 'Seus Lembretes',
+      theme: lightTheme,
+      darkTheme: darkTheme,
+      themeMode: _themeMode,
+      home: const HomeScreen(),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -140,11 +148,7 @@ class MyAppState extends State<MyApp> {
       supportedLocales: const [
         Locale('pt', 'BR'),
       ],
-      locale: const Locale('pt', 'BR'),
-      theme: lightTheme,
-      darkTheme: darkTheme,
-      themeMode: _themeMode,
-      home: const HomeScreen(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }

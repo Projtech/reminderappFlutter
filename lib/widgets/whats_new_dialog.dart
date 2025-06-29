@@ -1,5 +1,6 @@
 // lib/widgets/whats_new_dialog.dart
 import 'package:flutter/material.dart';
+import '../services/app_installer_service.dart';
 
 class WhatsNewDialog extends StatelessWidget {
   const WhatsNewDialog({super.key});
@@ -120,25 +121,76 @@ class WhatsNewDialog extends StatelessWidget {
         ),
       ),
       actions: [
+        // Botão "Atualizar agora"
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              Navigator.of(context).pop();
+              AppInstallerService.startUpdate(context);
+            },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
+              backgroundColor: Colors.green,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),
-            icon: const Icon(Icons.check, size: 20),
+            icon: const Icon(Icons.download, size: 20),
             label: const Text(
-              'Continuar',
+              'Atualizar agora',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
               ),
+            ),
+          ),
+        ),
+        
+        const SizedBox(height: 8),
+        
+        // Botão "Ver no site"
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () {
+              Navigator.of(context).pop();
+              AppInstallerService.openWebsite(context);
+            },
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.blue,
+              side: const BorderSide(color: Colors.blue),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            icon: const Icon(Icons.open_in_browser, size: 20),
+            label: const Text(
+              'Ver detalhes no site',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+        
+        const SizedBox(height: 8),
+        
+        // Botão "Depois"
+        SizedBox(
+          width: double.infinity,
+          child: TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.grey,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            child: const Text(
+              'Depois',
+              style: TextStyle(fontSize: 16),
             ),
           ),
         ),
