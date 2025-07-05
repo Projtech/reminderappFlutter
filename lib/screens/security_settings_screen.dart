@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../widgets/pin_setup_dialog.dart';
@@ -227,6 +228,25 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     }
   }
 
+  Future<void> _resetPinOnly() async {
+    final confirm = await _showConfirmDialog(
+      'Resetar PIN?',
+      'Isso removerá apenas o PIN configurado. Tem certeza?',
+    );
+    
+    if (confirm == true) {
+      final success = await AuthService.resetPinOnly();
+      if (success && mounted) {
+        setState(() {
+          _loadSettings(); // Recarrega as configurações para refletir a mudança
+        });
+        _showMessage('PIN resetado com sucesso!', Colors.orange);
+      } else {
+        _showMessage('Erro ao resetar PIN', Colors.red);
+      }
+    }
+  }
+
   void _showMessage(String message, Color color) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -362,24 +382,46 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
 
                   const SizedBox(height: 8),
 
-                  // Botão de Reset para Testes
-                  Card(
-                    color: Colors.red.withValues(alpha: 0.1),
-                    child: ListTile(
-                      title: const Text('Reset para Testes', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                      subtitle: const Text('Remove PIN/Biometria (só para desenvolvimento)'),
-                      leading: const Icon(Icons.delete_forever, color: Colors.red),
-                      trailing: const Icon(Icons.arrow_forward_ios, color: Colors.red),
-                      onTap: _resetForTesting,
+                  // Botão de Reset de PIN
+                  if (_authType == 'pin' || _authType == 'both')
+                    Card(
+                      color: Colors.orange.withOpacity(0.1),
+                      child: ListTile(
+                        title: const Text(
+                          'Resetar PIN',
+                          style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: const Text('Remove apenas o PIN configurado'),
+                        leading: const Icon(Icons.vpn_key_off, color: Colors.orange),
+                        trailing: const Icon(Icons.arrow_forward_ios, color: Colors.orange),
+                        onTap: _resetPinOnly,
+                      ),
                     ),
-                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Botão de Reset para Testes
+                  if (kDebugMode)
+                    Card(
+                      color: Colors.red.withOpacity(0.1),
+                      child: ListTile(
+                        title: const Text(
+                          'Reset para Testes',
+                          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: const Text('Remove PIN/Biometria (só para desenvolvimento)'),
+                        leading: const Icon(Icons.delete_forever, color: Colors.red),
+                        trailing: const Icon(Icons.arrow_forward_ios, color: Colors.red),
+                        onTap: _resetForTesting,
+                      ),
+                    ),
                 ],
 
                 const SizedBox(height: 24),
 
                 // Informações
                 Card(
-                  color: Colors.blue.withValues(alpha: 0.1),
+                  color: Colors.blue.withOpacity(0.1),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
@@ -412,3 +454,5 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     );
   }
 }
+
+

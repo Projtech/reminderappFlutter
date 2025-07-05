@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'dart:math';
+import 'package:crypto/crypto.dart';
 
 class AuthService {
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage(
@@ -30,8 +31,17 @@ class AuthService {
       final bool isDeviceSupported = await _localAuth.isDeviceSupported();
       final List<BiometricType> availableBiometrics = await _localAuth.getAvailableBiometrics();
       
+      // Adicionado logs para depuração
+      print('isBiometricAvailable: isAvailable = $isAvailable');
+      print('isBiometricAvailable: isDeviceSupported = $isDeviceSupported');
+      print('isBiometricAvailable: availableBiometrics = ${availableBiometrics.map((e) => e.toString()).join(', ')}');
+
       return isAvailable && isDeviceSupported && availableBiometrics.isNotEmpty;
+    } on PlatformException catch (e) {
+      print('Erro ao verificar biometria (PlatformException): ${e.code} - ${e.message}');
+      return false;
     } catch (e) {
+      print('Erro genérico ao verificar biometria: ${e.toString()}');
       return false;
     }
   }
@@ -39,13 +49,39 @@ class AuthService {
   // Verificar se segurança está habilitada
   static Future<bool> isSecurityEnabled() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_securityEnabledKey) ?? false;
+    final isEnabled = prefs.getBool(_securityEnabledKey) ?? false;
+    if (!isEnabled) return false;
+
+    // Adição: Se o tipo de autenticação é PIN ou Ambos, verificar se o PIN está realmente armazenado
+    final authType = prefs.getString(_authTypeKey) ?? 'none';
+    if (authType == 'pin' || authType == 'both') {
+      final storedPin = await _secureStorage.read(key: _pinKey);
+      return storedPin != null; // Só está habilitado se o PIN existir
+    }
+    return isEnabled;
   }
 
   // Obter tipo de autenticação configurado
   static Future<String> getAuthType() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_authTypeKey) ?? 'none';
+    final authType = prefs.getString(_authTypeKey) ?? 'none';
+
+    // Adição: Se o tipo é PIN ou Ambos, verificar se o PIN está realmente armazenado
+    if (authType == 'pin' || authType == 'both') {
+      final storedPin = await _secureStorage.read(key: _pinKey);
+      if (storedPin == null) {
+        // Se o PIN não existe, mas o tipo está configurado, redefinir para 'none' ou 'biometric'
+        if (authType == 'pin') {
+          await prefs.setString(_authTypeKey, 'none');
+          await prefs.setBool(_securityEnabledKey, false);
+          return 'none';
+        } else if (authType == 'both') {
+          await prefs.setString(_authTypeKey, 'biometric');
+          return 'biometric';
+        }
+      }
+    }
+    return authType;
   }
 
   // Obter/definir timeout configurável
@@ -108,6 +144,10 @@ class AuthService {
         final hashedPin = _hashPin(pin, salt);
         await _secureStorage.write(key: _pinKey, value: hashedPin);
         await _secureStorage.write(key: _pinSaltKey, value: salt);
+      } else if (authType == 'pin' || authType == 'both') {
+        // Se o tipo é PIN ou Ambos, mas nenhum PIN foi fornecido, desabilitar segurança
+        await disableSecurity();
+        return false;
       }
       
       // Resetar tentativas e lockout
@@ -137,22 +177,38 @@ class AuthService {
       
       return didAuthenticate;
     } on PlatformException catch (e) {
-      // Tratar erros específicos de biometria
+      String errorMessage;
       switch (e.code) {
         case 'NotAvailable':
+          errorMessage = 'Biometria não disponível neste dispositivo.';
+          break;
         case 'NotEnrolled':
+          errorMessage = 'Nenhuma biometria cadastrada. Cadastre uma em suas configurações.';
+          break;
         case 'PasscodeNotSet':
-          return false;
+          errorMessage = 'PIN/Senha do dispositivo não configurado. Configure um para usar biometria.';
+          break;
         case 'LockedOut':
+          errorMessage = 'Biometria bloqueada devido a muitas tentativas. Tente novamente mais tarde.';
+          break;
         case 'PermanentlyLockedOut':
-          return false;
+          errorMessage = 'Biometria permanentemente bloqueada. Pode ser necessário reiniciar o dispositivo ou reconfigurar.';
+          break;
         case 'UserCancel':
+          errorMessage = 'Autenticação biométrica cancelada pelo usuário.';
+          break;
         case 'UserFallback':
-          return false;
+          errorMessage = 'Usuário escolheu usar outro método de autenticação.';
+          break;
         default:
-          return false;
+          errorMessage = 'Erro desconhecido na biometria: ${e.message}';
+          break;
       }
+      // Em um app real, você pode querer mostrar essa mensagem ao usuário.
+      // print('BIOMETRIC_AUTH_ERROR: $errorMessage'); // Para debug
+      return false;
     } catch (e) {
+      // print('BIOMETRIC_AUTH_GENERIC_ERROR: ${e.toString()}'); // Para debug
       return false;
     }
   }
@@ -189,10 +245,10 @@ class AuthService {
         return await authenticateWithBiometric();
       case 'pin':
         // PIN será solicitado na tela
-        return false;
+        return false; // Retorna false para que a tela de PIN seja exibida
       case 'both':
         // Usuário pode escolher na tela
-        return false;
+        return false; // Retorna false para que a tela de escolha seja exibida
       default:
         return true; // Sem segurança
     }
@@ -237,26 +293,54 @@ class AuthService {
       return false;
     }
   }
+
   // Reset de segurança para testes
-static Future<bool> resetSecurityForTesting() async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    
-    // Manter dados do app, mas limpar apenas configurações de segurança
-    await prefs.setBool(_securityEnabledKey, false);
-    await prefs.remove(_authTypeKey);
-    await prefs.remove(_failAttemptsKey);
-    await prefs.remove(_lockoutTimeKey);
-    await prefs.remove(_lastAuthKey);
-    await _secureStorage.delete(key: _pinKey);
-    await _secureStorage.delete(key: _pinSaltKey);
-    
-    await _logSecurityEvent('RESET_FOR_TESTING');
-    return true;
-  } catch (e) {
-    return false;
+  static Future<bool> resetSecurityForTesting() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Manter dados do app, mas limpar apenas configurações de segurança
+      await prefs.setBool(_securityEnabledKey, false);
+      await prefs.remove(_authTypeKey);
+      await prefs.remove(_failAttemptsKey);
+      await prefs.remove(_lockoutTimeKey);
+      await prefs.remove(_lastAuthKey);
+      await _secureStorage.delete(key: _pinKey);
+      await _secureStorage.delete(key: _pinSaltKey);
+      
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
-}
+
+  // Novo método para resetar apenas o PIN
+  static Future<bool> resetPinOnly() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Remover apenas o PIN e o salt
+      await _secureStorage.delete(key: _pinKey);
+      await _secureStorage.delete(key: _pinSaltKey);
+      
+      // Se o tipo de autenticação era 'pin' ou 'both', redefinir para 'none' ou 'biometric' respectivamente
+      final currentAuthType = await getAuthType();
+      if (currentAuthType == 'pin') {
+        await prefs.setString(_authTypeKey, 'none');
+        await prefs.setBool(_securityEnabledKey, false);
+      } else if (currentAuthType == 'both') {
+        await prefs.setString(_authTypeKey, 'biometric');
+      }
+      
+      // Resetar tentativas falhas e lockout para o PIN
+      await prefs.setInt(_failAttemptsKey, 0);
+      await prefs.remove(_lockoutTimeKey);
+
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
 
   // Métodos auxiliares privados
   static String _generateSalt() {
@@ -266,16 +350,22 @@ static Future<bool> resetSecurityForTesting() async {
   }
 
   static String _hashPin(String pin, String salt) {
-    // Hash seguro com salt dinâmico e múltiplas iterações
-    var input = pin + salt;
-    
-    // 10.000 iterações para tornar mais seguro
-    for (int i = 0; i < 10000; i++) {
-      final bytes = utf8.encode(input);
-      input = bytes.fold('', (prev, byte) => prev + byte.toRadixString(16).padLeft(2, '0'));
+    final saltBytes = utf8.encode(salt);
+    final pinBytes = utf8.encode(pin);
+
+    // Usando PBKDF2 com SHA256 e 100.000 iterações para segurança
+    final Hmac hmac = Hmac(sha256, saltBytes);
+    final Digest digest = hmac.convert(pinBytes);
+
+    // Para simular iterações do PBKDF2 de forma simples (não é PBKDF2 real, mas melhora o hash atual)
+    // Em um ambiente real, usaria uma implementação de PBKDF2 de uma biblioteca como 'pointycastle'
+    // ou 'flutter_sodium' para Argon2/scrypt.
+    var input = digest.bytes;
+    for (int i = 0; i < 100000; i++) {
+      input = sha256.convert(input).bytes;
     }
-    
-    return input;
+
+    return base64.encode(input);
   }
 
   static Future<void> _recordSuccessfulAuth() async {
@@ -314,9 +404,10 @@ static Future<bool> resetSecurityForTesting() async {
   }
 
   // Logs para debug (apenas em desenvolvimento)
-  static Future<void> _logSecurityEvent(String event, {Map<String, dynamic>? details}) async {
-    // Em produção, remover ou enviar para analytics
-    final timestamp = DateTime.now().toIso8601String();
-    print('SECURITY_LOG [$timestamp]: $event ${details ?? ''}');
-  }
+  // static Future<void> _logSecurityEvent(String event, {Map<String, dynamic>? details}) async {
+  //   // Em produção, remover ou enviar para analytics
+  //   final timestamp = DateTime.now().toIso8601String();
+  //   print('SECURITY_LOG [$timestamp]: $event ${details ?? ''}');
+  // }
 }
+
