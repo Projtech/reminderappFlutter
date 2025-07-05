@@ -14,6 +14,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   String _authType = 'none';
   bool _biometricAvailable = false;
   bool _isLoading = true;
+  int _timeoutMinutes = 5;
 
   @override
   void initState() {
@@ -27,12 +28,14 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     final securityEnabled = await AuthService.isSecurityEnabled();
     final authType = await AuthService.getAuthType();
     final biometricAvailable = await AuthService.isBiometricAvailable();
+    final timeoutMinutes = await AuthService.getAuthTimeoutMinutes();
     
     if (mounted) {
       setState(() {
         _isSecurityEnabled = securityEnabled;
         _authType = authType;
         _biometricAvailable = biometricAvailable;
+        _timeoutMinutes = timeoutMinutes;
         _isLoading = false;
       });
     }
@@ -40,19 +43,48 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
 
   Future<void> _toggleSecurity(bool enabled) async {
     if (!enabled) {
-      // Desabilitar segurança
-      final success = await AuthService.disableSecurity();
-      if (success && mounted) {
-        setState(() {
-          _isSecurityEnabled = false;
-          _authType = 'none';
-        });
-        _showMessage('Segurança desabilitada', Colors.orange);
+      // Confirmar desabilitação
+      final confirm = await _showConfirmDialog(
+        'Desabilitar Segurança?',
+        'Isso removerá toda a proteção do app. Tem certeza?',
+      );
+      
+      if (confirm == true) {
+        final success = await AuthService.disableSecurity();
+        if (success && mounted) {
+          setState(() {
+            _isSecurityEnabled = false;
+            _authType = 'none';
+          });
+          _showMessage('Segurança desabilitada', Colors.orange);
+        }
       }
     } else {
       // Mostrar opções para habilitar
       _showSetupOptions();
     }
+  }
+
+  Future<bool?> _showConfirmDialog(String title, String content) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showSetupOptions() {
@@ -142,6 +174,59 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     }
   }
 
+  Future<void> _updateTimeout(int minutes) async {
+    await AuthService.setAuthTimeoutMinutes(minutes);
+    setState(() {
+      _timeoutMinutes = minutes;
+    });
+    _showMessage('Timeout atualizado para $minutes minutos', Colors.blue);
+  }
+
+  void _showTimeoutOptions() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Timeout de Autenticação'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Após quanto tempo solicitar autenticação novamente?'),
+            const SizedBox(height: 16),
+            ...[1, 5, 10, 15, 30, 60].map((minutes) => ListTile(
+              title: Text('$minutes ${minutes == 1 ? 'minuto' : 'minutos'}'),
+              trailing: _timeoutMinutes == minutes ? const Icon(Icons.check, color: Colors.green) : null,
+              onTap: () {
+                Navigator.pop(context);
+                _updateTimeout(minutes);
+              },
+            )),
+          ],
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+    );
+  }
+
+  Future<void> _resetForTesting() async {
+    final confirm = await _showConfirmDialog(
+      'Reset para Testes?',
+      'Isso removerá toda a segurança configurada. Use apenas para testes!',
+    );
+    
+    if (confirm == true) {
+      final success = await AuthService.resetSecurityForTesting();
+      if (success && mounted) {
+        setState(() {
+          _isSecurityEnabled = false;
+          _authType = 'none';
+        });
+        _showMessage('Segurança resetada para testes!', Colors.orange);
+      } else {
+        _showMessage('Erro ao resetar segurança', Colors.red);
+      }
+    }
+  }
+
   void _showMessage(String message, Color color) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -223,6 +308,13 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                           'Método: ${_getAuthTypeDescription()}',
                           style: theme.textTheme.bodyMedium,
                         ),
+                        if (_isSecurityEnabled) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Timeout: $_timeoutMinutes ${_timeoutMinutes == 1 ? 'minuto' : 'minutos'}',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -252,6 +344,33 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                       leading: const Icon(Icons.edit),
                       trailing: const Icon(Icons.arrow_forward_ios),
                       onTap: _showSetupOptions,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Configurar Timeout
+                  Card(
+                    child: ListTile(
+                      title: const Text('Timeout de Autenticação'),
+                      subtitle: Text('$_timeoutMinutes ${_timeoutMinutes == 1 ? 'minuto' : 'minutos'}'),
+                      leading: const Icon(Icons.schedule),
+                      trailing: const Icon(Icons.arrow_forward_ios),
+                      onTap: _showTimeoutOptions,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Botão de Reset para Testes
+                  Card(
+                    color: Colors.red.withValues(alpha: 0.1),
+                    child: ListTile(
+                      title: const Text('Reset para Testes', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                      subtitle: const Text('Remove PIN/Biometria (só para desenvolvimento)'),
+                      leading: const Icon(Icons.delete_forever, color: Colors.red),
+                      trailing: const Icon(Icons.arrow_forward_ios, color: Colors.red),
+                      onTap: _resetForTesting,
                     ),
                   ),
                 ],

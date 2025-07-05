@@ -78,18 +78,45 @@ class _PinSetupDialogState extends State<PinSetupDialog> {
   }
 
   void _validatePin() {
-    if (_enteredPin == _confirmController.text) {
-      Navigator.pop(context, _enteredPin);
-    } else {
-      _showError();
+    if (_enteredPin != _confirmController.text) {
+      _showError('PINs não coincidem. Tente novamente.');
+      return;
     }
+    
+    if (_isWeakPin(_enteredPin)) {
+      _showError('PIN muito fraco. Evite sequências e repetições.');
+      return;
+    }
+    
+    Navigator.pop(context, _enteredPin);
   }
 
-  void _showError() {
+  bool _isWeakPin(String pin) {
+    // PIN sequencial (1234, 4321)
+    if (pin == '1234' || pin == '4321' || pin == '2345' || pin == '3456' || 
+        pin == '5678' || pin == '6789' || pin == '9876' || pin == '8765' ||
+        pin == '7654' || pin == '6543' || pin == '5432') {
+      return true;
+    }
+    
+    // PIN repetitivo (0000, 1111, etc)
+    if (pin[0] == pin[1] && pin[1] == pin[2] && pin[2] == pin[3]) {
+      return true;
+    }
+    
+    // PINs muito comuns
+    const commonPins = ['0000', '1234', '1111', '2222', '3333', '4444', 
+                        '5555', '6666', '7777', '8888', '9999', '1212',
+                        '1010', '2020', '1122', '1313', '2323'];
+    
+    return commonPins.contains(pin);
+  }
+
+  void _showError(String message) {
     HapticFeedback.heavyImpact();
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('PINs não coincidem. Tente novamente.'),
+      SnackBar(
+        content: Text(message),
         backgroundColor: Colors.red,
         behavior: SnackBarBehavior.floating,
       ),

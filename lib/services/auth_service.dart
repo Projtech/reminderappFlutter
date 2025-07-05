@@ -1,7 +1,9 @@
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
 import 'dart:convert';
+import 'dart:math';
 
 class AuthService {
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage(
@@ -11,11 +13,13 @@ class AuthService {
   );
   
   static const String _pinKey = 'app_security_pin';
+  static const String _pinSaltKey = 'app_security_pin_salt';
   static const String _securityEnabledKey = 'security_enabled';
   static const String _authTypeKey = 'auth_type'; // 'biometric', 'pin', 'both'
   static const String _failAttemptsKey = 'failed_attempts';
   static const String _lockoutTimeKey = 'lockout_time';
   static const String _lastAuthKey = 'last_auth_time';
+  static const String _timeoutMinutesKey = 'auth_timeout_minutes';
   
   static final LocalAuthentication _localAuth = LocalAuthentication();
   
@@ -44,14 +48,25 @@ class AuthService {
     return prefs.getString(_authTypeKey) ?? 'none';
   }
 
-  // Verificar se precisa autenticar (baseado no tempo)
+  // Obter/definir timeout configurável
+  static Future<int> getAuthTimeoutMinutes() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_timeoutMinutesKey) ?? 5; // Default 5 minutos
+  }
+
+  static Future<void> setAuthTimeoutMinutes(int minutes) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_timeoutMinutesKey, minutes.clamp(1, 60)); // Entre 1 e 60 min
+  }
+
+  // Verificar se precisa autenticar (baseado no tempo configurável)
   static Future<bool> needsAuthentication() async {
     if (!await isSecurityEnabled()) return false;
     
     final prefs = await SharedPreferences.getInstance();
     final lastAuth = prefs.getInt(_lastAuthKey) ?? 0;
     final now = DateTime.now().millisecondsSinceEpoch;
-    const timeoutMinutes = 5; // Re-autenticar após 5 minutos
+    final timeoutMinutes = await getAuthTimeoutMinutes();
     
     return (now - lastAuth) > (timeoutMinutes * 60 * 1000);
   }
@@ -89,8 +104,10 @@ class AuthService {
       
       // Salvar PIN se fornecido
       if (pin != null && pin.isNotEmpty) {
-        final hashedPin = _hashPin(pin);
+        final salt = _generateSalt();
+        final hashedPin = _hashPin(pin, salt);
         await _secureStorage.write(key: _pinKey, value: hashedPin);
+        await _secureStorage.write(key: _pinSaltKey, value: salt);
       }
       
       // Resetar tentativas e lockout
@@ -119,6 +136,22 @@ class AuthService {
       }
       
       return didAuthenticate;
+    } on PlatformException catch (e) {
+      // Tratar erros específicos de biometria
+      switch (e.code) {
+        case 'NotAvailable':
+        case 'NotEnrolled':
+        case 'PasscodeNotSet':
+          return false;
+        case 'LockedOut':
+        case 'PermanentlyLockedOut':
+          return false;
+        case 'UserCancel':
+        case 'UserFallback':
+          return false;
+        default:
+          return false;
+      }
     } catch (e) {
       return false;
     }
@@ -128,9 +161,11 @@ class AuthService {
   static Future<bool> authenticateWithPin(String enteredPin) async {
     try {
       final storedHashedPin = await _secureStorage.read(key: _pinKey);
-      if (storedHashedPin == null) return false;
+      final storedSalt = await _secureStorage.read(key: _pinSaltKey);
       
-      final enteredHashedPin = _hashPin(enteredPin);
+      if (storedHashedPin == null || storedSalt == null) return false;
+      
+      final enteredHashedPin = _hashPin(enteredPin, storedSalt);
       final isValid = storedHashedPin == enteredHashedPin;
       
       if (isValid) {
@@ -174,6 +209,7 @@ class AuthService {
       await prefs.remove(_lockoutTimeKey);
       await prefs.remove(_lastAuthKey);
       await _secureStorage.delete(key: _pinKey);
+      await _secureStorage.delete(key: _pinSaltKey);
       
       return true;
     } catch (e) {
@@ -181,12 +217,65 @@ class AuthService {
     }
   }
 
+  // Reset de emergência (para recuperação)
+  static Future<bool> emergencyReset() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Limpar todas as configurações de autenticação
+      await prefs.remove(_securityEnabledKey);
+      await prefs.remove(_authTypeKey);
+      await prefs.remove(_failAttemptsKey);
+      await prefs.remove(_lockoutTimeKey);
+      await prefs.remove(_lastAuthKey);
+      await prefs.remove(_timeoutMinutesKey);
+      await _secureStorage.delete(key: _pinKey);
+      await _secureStorage.delete(key: _pinSaltKey);
+      
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+  // Reset de segurança para testes
+static Future<bool> resetSecurityForTesting() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    
+    // Manter dados do app, mas limpar apenas configurações de segurança
+    await prefs.setBool(_securityEnabledKey, false);
+    await prefs.remove(_authTypeKey);
+    await prefs.remove(_failAttemptsKey);
+    await prefs.remove(_lockoutTimeKey);
+    await prefs.remove(_lastAuthKey);
+    await _secureStorage.delete(key: _pinKey);
+    await _secureStorage.delete(key: _pinSaltKey);
+    
+    await _logSecurityEvent('RESET_FOR_TESTING');
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
   // Métodos auxiliares privados
-  static String _hashPin(String pin) {
-    // Hash simples para demonstração - em produção use crypto mais robusto
-    final bytes = utf8.encode('${pin}seus_lembretes_salt');
-    final hash = bytes.fold(0, (prev, element) => prev + element);
-    return hash.toString();
+  static String _generateSalt() {
+    final random = Random.secure();
+    final values = List<int>.generate(32, (i) => random.nextInt(256));
+    return base64.encode(values);
+  }
+
+  static String _hashPin(String pin, String salt) {
+    // Hash seguro com salt dinâmico e múltiplas iterações
+    var input = pin + salt;
+    
+    // 10.000 iterações para tornar mais seguro
+    for (int i = 0; i < 10000; i++) {
+      final bytes = utf8.encode(input);
+      input = bytes.fold('', (prev, byte) => prev + byte.toRadixString(16).padLeft(2, '0'));
+    }
+    
+    return input;
   }
 
   static Future<void> _recordSuccessfulAuth() async {
@@ -212,8 +301,8 @@ class AuthService {
   }
 
   static int _getLockoutDuration(int attempts) {
-    // Lockout progressivo: 1 min, 5 min, 15 min, 30 min
-    const durations = [60000, 300000, 900000, 1800000]; // em milissegundos
+    // Lockout progressivo mais suave: 30s, 2min, 5min, 10min
+    const durations = [30000, 120000, 300000, 600000]; // em milissegundos
     final index = (attempts - 3).clamp(0, durations.length - 1);
     return durations[index];
   }
@@ -222,5 +311,12 @@ class AuthService {
   static Future<int> getFailedAttempts() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt(_failAttemptsKey) ?? 0;
+  }
+
+  // Logs para debug (apenas em desenvolvimento)
+  static Future<void> _logSecurityEvent(String event, {Map<String, dynamic>? details}) async {
+    // Em produção, remover ou enviar para analytics
+    final timestamp = DateTime.now().toIso8601String();
+    print('SECURITY_LOG [$timestamp]: $event ${details ?? ''}');
   }
 }

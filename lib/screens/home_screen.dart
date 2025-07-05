@@ -111,9 +111,13 @@ Future<void> _checkAuthenticationIfNeeded() async {
         ),
       );
       
-      // Se não autenticou, fechar o app
+      // Se não autenticou, tentar fechar gracefully
       if (authenticated != true && mounted) {
-        SystemNavigator.pop(); // Fecha o app
+        // Dar uma chance antes de fechar
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (mounted) {
+          SystemNavigator.pop();
+        }
       }
     }
   } catch (e) {
