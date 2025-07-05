@@ -5,7 +5,6 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/reminder.dart';
-import '../widgets/whats_new_dialog.dart';
 
 class NotificationService {
 static final FlutterLocalNotificationsPlugin _notifications =

@@ -39,7 +39,7 @@ class WhatsNewDialog extends StatelessWidget {
       ),
       title: Row(
         children: [
-          Icon(
+          const Icon(
             Icons.system_update,
             color: Colors.blue,
             size: 28,
@@ -105,7 +105,7 @@ class WhatsNewDialog extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.security, color: Colors.green, size: 20),
+                      const Icon(Icons.security, color: Colors.green, size: 20),
                       const SizedBox(width: 8),
                       Text(
                         'Por que atualizar?',

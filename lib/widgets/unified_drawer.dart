@@ -15,6 +15,7 @@ import '../screens/privacy_settings_screen.dart';
 import '../services/update_service.dart';
 import '../services/timer_service.dart';
 import '../widgets/whats_new_dialog.dart'; // ✅ ADICIONADO
+import '../screens/security_settings_screen.dart';
 
 class UnifiedDrawer extends StatefulWidget {
 final String currentScreen;
@@ -318,6 +319,17 @@ return Column(
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const PrivacySettingsScreen()),
+        );
+      },
+    ),
+    ListTile(
+      leading: const Icon(Icons.security),
+      title: const Text('Segurança do App'),
+      onTap: () {
+        Navigator.pop(context);
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const SecuritySettingsScreen()),
         );
       },
     ),

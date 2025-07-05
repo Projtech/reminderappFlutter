@@ -42,8 +42,6 @@ class MyApp extends StatefulWidget {
 // ✅ CORREÇÃO 1: Remover underscore para tornar público
 class MyAppState extends State<MyApp> {
   late ThemeMode _themeMode;
-  
-  get navigatorKey => null;
 
   @override
   void initState() {
@@ -134,7 +132,7 @@ class MyAppState extends State<MyApp> {
     );
 
     return MaterialApp(
-      navigatorKey: navigatorKey,
+      navigatorKey: MyApp.navigatorKey,
       title: 'Seus Lembretes',
       theme: lightTheme,
       darkTheme: darkTheme,
