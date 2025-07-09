@@ -25,12 +25,12 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
 
   Future<void> _loadSettings() async {
     setState(() => _isLoading = true);
-    
+
     final securityEnabled = await AuthService.isSecurityEnabled();
     final authType = await AuthService.getAuthType();
     final biometricAvailable = await AuthService.isBiometricAvailable();
     final timeoutMinutes = await AuthService.getAuthTimeoutMinutes();
-    
+
     if (mounted) {
       setState(() {
         _isSecurityEnabled = securityEnabled;
@@ -49,7 +49,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
         'Desabilitar Segurança?',
         'Isso removerá toda a proteção do app. Tem certeza?',
       );
-      
+
       if (confirm == true) {
         final success = await AuthService.disableSecurity();
         if (success && mounted) {
@@ -93,7 +93,18 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('🔐 Configurar Segurança'),
-        content: const Text('Como você deseja proteger seu app?'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Como você deseja proteger seu app?'),
+            SizedBox(height: 8),
+            Text(
+              '⚠️ Biometria sempre requer PIN como backup',
+              style: TextStyle(fontSize: 12, color: Colors.orange),
+            ),
+          ],
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         actions: [
           TextButton(
@@ -131,13 +142,21 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   }
 
   Future<void> _setupBiometric() async {
-    final success = await AuthService.setupSecurity(authType: 'biometric');
+    // ✅ NOVO: Sempre pedir PIN primeiro
+    final pin = await PinSetupDialog.show(context);
+    if (pin == null) {
+      _showMessage('PIN é obrigatório para usar biometria', Colors.orange);
+      return;
+    }
+
+    final success =
+        await AuthService.setupSecurity(authType: 'biometric', pin: pin);
     if (success && mounted) {
       setState(() {
         _isSecurityEnabled = true;
         _authType = 'biometric';
       });
-      _showMessage('Biometria configurada!', Colors.green);
+      _showMessage('Biometria + PIN configurados!', Colors.green);
     } else {
       _showMessage('Erro ao configurar biometria', Colors.red);
     }
@@ -146,7 +165,8 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   Future<void> _setupPin() async {
     final pin = await PinSetupDialog.show(context);
     if (pin != null) {
-      final success = await AuthService.setupSecurity(authType: 'pin', pin: pin);
+      final success =
+          await AuthService.setupSecurity(authType: 'pin', pin: pin);
       if (success && mounted) {
         setState(() {
           _isSecurityEnabled = true;
@@ -162,7 +182,8 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   Future<void> _setupBoth() async {
     final pin = await PinSetupDialog.show(context);
     if (pin != null) {
-      final success = await AuthService.setupSecurity(authType: 'both', pin: pin);
+      final success =
+          await AuthService.setupSecurity(authType: 'both', pin: pin);
       if (success && mounted) {
         setState(() {
           _isSecurityEnabled = true;
@@ -194,13 +215,16 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
             const Text('Após quanto tempo solicitar autenticação novamente?'),
             const SizedBox(height: 16),
             ...[1, 5, 10, 15, 30, 60].map((minutes) => ListTile(
-              title: Text('$minutes ${minutes == 1 ? 'minuto' : 'minutos'}'),
-              trailing: _timeoutMinutes == minutes ? const Icon(Icons.check, color: Colors.green) : null,
-              onTap: () {
-                Navigator.pop(context);
-                _updateTimeout(minutes);
-              },
-            )),
+                  title:
+                      Text('$minutes ${minutes == 1 ? 'minuto' : 'minutos'}'),
+                  trailing: _timeoutMinutes == minutes
+                      ? const Icon(Icons.check, color: Colors.green)
+                      : null,
+                  onTap: () {
+                    Navigator.pop(context);
+                    _updateTimeout(minutes);
+                  },
+                )),
           ],
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -213,7 +237,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
       'Reset para Testes?',
       'Isso removerá toda a segurança configurada. Use apenas para testes!',
     );
-    
+
     if (confirm == true) {
       final success = await AuthService.resetSecurityForTesting();
       if (success && mounted) {
@@ -233,7 +257,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
       'Resetar PIN?',
       'Isso removerá apenas o PIN configurado. Tem certeza?',
     );
-    
+
     if (confirm == true) {
       final success = await AuthService.resetPinOnly();
       if (success && mounted) {
@@ -258,14 +282,14 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     );
   }
 
-  String _getAuthTypeDescription() {
+String _getAuthTypeDescription() {
     switch (_authType) {
       case 'biometric':
-        return 'Biometria (Digital/Face)';
+        return 'Biometria com PIN de backup';
       case 'pin':
-        return 'PIN de 4 dígitos';
+        return 'Apenas PIN de 4 dígitos';
       case 'both':
-        return 'Biometria + PIN';
+        return 'Biometria + PIN (escolha na hora)';
       default:
         return 'Desabilitada';
     }
@@ -302,7 +326,9 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                           children: [
                             Icon(
                               _isSecurityEnabled ? Icons.lock : Icons.lock_open,
-                              color: _isSecurityEnabled ? Colors.green : Colors.orange,
+                              color: _isSecurityEnabled
+                                  ? Colors.green
+                                  : Colors.orange,
                             ),
                             const SizedBox(width: 8),
                             Text(
@@ -315,11 +341,13 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          _isSecurityEnabled 
+                          _isSecurityEnabled
                               ? 'Seu app está protegido'
                               : 'Seu app não está protegido',
                           style: TextStyle(
-                            color: _isSecurityEnabled ? Colors.green : Colors.orange,
+                            color: _isSecurityEnabled
+                                ? Colors.green
+                                : Colors.orange,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -346,7 +374,8 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                 Card(
                   child: SwitchListTile(
                     title: const Text('Habilitar Segurança'),
-                    subtitle: const Text('Exigir autenticação para abrir o app'),
+                    subtitle:
+                        const Text('Exigir autenticação para abrir o app'),
                     value: _isSecurityEnabled,
                     onChanged: _toggleSecurity,
                     secondary: const Icon(Icons.security),
@@ -373,7 +402,8 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                   Card(
                     child: ListTile(
                       title: const Text('Timeout de Autenticação'),
-                      subtitle: Text('$_timeoutMinutes ${_timeoutMinutes == 1 ? 'minuto' : 'minutos'}'),
+                      subtitle: Text(
+                          '$_timeoutMinutes ${_timeoutMinutes == 1 ? 'minuto' : 'minutos'}'),
                       leading: const Icon(Icons.schedule),
                       trailing: const Icon(Icons.arrow_forward_ios),
                       onTap: _showTimeoutOptions,
@@ -389,11 +419,15 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                       child: ListTile(
                         title: const Text(
                           'Resetar PIN',
-                          style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              color: Colors.orange,
+                              fontWeight: FontWeight.bold),
                         ),
                         subtitle: const Text('Remove apenas o PIN configurado'),
-                        leading: const Icon(Icons.vpn_key_off, color: Colors.orange),
-                        trailing: const Icon(Icons.arrow_forward_ios, color: Colors.orange),
+                        leading:
+                            const Icon(Icons.vpn_key_off, color: Colors.orange),
+                        trailing: const Icon(Icons.arrow_forward_ios,
+                            color: Colors.orange),
                         onTap: _resetPinOnly,
                       ),
                     ),
@@ -407,11 +441,15 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                       child: ListTile(
                         title: const Text(
                           'Reset para Testes',
-                          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              color: Colors.red, fontWeight: FontWeight.bold),
                         ),
-                        subtitle: const Text('Remove PIN/Biometria (só para desenvolvimento)'),
-                        leading: const Icon(Icons.delete_forever, color: Colors.red),
-                        trailing: const Icon(Icons.arrow_forward_ios, color: Colors.red),
+                        subtitle: const Text(
+                            'Remove PIN/Biometria (só para desenvolvimento)'),
+                        leading:
+                            const Icon(Icons.delete_forever, color: Colors.red),
+                        trailing: const Icon(Icons.arrow_forward_ios,
+                            color: Colors.red),
                         onTap: _resetForTesting,
                       ),
                     ),
@@ -440,11 +478,16 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
-                        const Text('• A autenticação é solicitada ao abrir o app'),
-                        const Text('• Após 3 tentativas erradas, o app é temporariamente bloqueado'),
-                        const Text('• Seus dados ficam protegidos apenas no seu dispositivo'),
-                        const Text('• Você pode desabilitar a qualquer momento'),
+                        const Text(
+                            '• A autenticação é solicitada ao abrir o app'),
+                        const Text(
+                            '• Após 5 tentativas erradas, o app é temporariamente bloqueado'),
+                        const Text(
+                            '• Biometria sempre requer PIN como método alternativo'),
+                        const Text(
+                            '• Seus dados ficam protegidos apenas no seu dispositivo'),
+                        const Text(
+                            '• Você pode desabilitar a qualquer momento'),
                       ],
                     ),
                   ),
@@ -454,5 +497,3 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     );
   }
 }
-
-

@@ -123,7 +123,7 @@ class AppInstallerService {
         throw Exception('Não foi possível acessar o armazenamento');
       }
 
-      final fileName = 'seus_lembretes_update.apk';
+      const fileName = 'seus_lembretes_update.apk';
       final filePath = '${directory.path}/$fileName';
       final file = File(filePath);
 

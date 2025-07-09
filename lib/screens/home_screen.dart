@@ -1,7 +1,6 @@
 // ignore_for_file: use_build_context_synchronously
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../screens/reminders_list.dart';
@@ -10,8 +9,6 @@ import '../services/notification_service.dart';
 import '../database/database_helper.dart';
 import '../services/consent_service.dart';
 import '../widgets/consent_dialog.dart';
-import '../services/auth_service.dart';
-import '../screens/auth_screen.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -24,7 +21,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _isInitializing = true;
-  bool _isAppInBackground = false;
 
   @override
   void initState() {
@@ -37,18 +33,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      _isAppInBackground = true;
-    } else if (state == AppLifecycleState.resumed && _isAppInBackground) {
-      _isAppInBackground = false;
-      _checkAuthenticationIfNeeded();
-    }
   }
 
 Future<void> _checkConsentIfNeeded() async {
@@ -91,39 +75,6 @@ Future<void> _checkConsentIfNeeded() async {
   }
 }
 
-Future<void> _checkAuthenticationIfNeeded() async {
-  try {
-    // Verificar se segurança está habilitada
-    final isSecurityEnabled = await AuthService.isSecurityEnabled();
-    if (!isSecurityEnabled) return;
-    
-    // Verificar se precisa autenticar
-    final needsAuth = await AuthService.needsAuthentication();
-    if (!needsAuth) return;
-    
-    if (mounted) {
-      // Mostrar tela de autenticação
-      final authenticated = await Navigator.push<bool>(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const AuthScreen(),
-          settings: const RouteSettings(name: '/auth'),
-        ),
-      );
-      
-      // Se não autenticou, tentar fechar gracefully
-      if (authenticated != true && mounted) {
-        // Dar uma chance antes de fechar
-        await Future.delayed(const Duration(milliseconds: 500));
-        if (mounted) {
-          SystemNavigator.pop();
-        }
-      }
-    }
-  } catch (e) {
-    // Error handled silently
-  }
-}
 
 Future<void> _initializeAppInBackground() async {
   try {
@@ -137,11 +88,8 @@ Future<void> _initializeAppInBackground() async {
     
     await _requestNotificationPermissionIfNeeded();
     
-    // ✅ NOVO: Verificar consentimento LGPD
+// ✅ NOVO: Verificar consentimento LGPD
     await _checkConsentIfNeeded();
-    
-    // ✅ NOVO: Verificar autenticação de segurança
-    await _checkAuthenticationIfNeeded();
     
   } catch (e) {
     // Error handled silently

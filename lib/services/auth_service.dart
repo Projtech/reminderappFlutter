@@ -36,7 +36,7 @@ class AuthService {
       print('isBiometricAvailable: isDeviceSupported = $isDeviceSupported');
       print('isBiometricAvailable: availableBiometrics = ${availableBiometrics.map((e) => e.toString()).join(', ')}');
 
-      return isAvailable && isDeviceSupported && availableBiometrics.isNotEmpty;
+      return isAvailable && isDeviceSupported && availableBiometrics.contains(BiometricType.fingerprint);
     } on PlatformException catch (e) {
       print('Erro ao verificar biometria (PlatformException): ${e.code} - ${e.message}');
       return false;
@@ -127,6 +127,7 @@ class AuthService {
   }
 
   // Configurar segurança
+// Configurar segurança
   static Future<bool> setupSecurity({
     required String authType,
     String? pin,
@@ -134,18 +135,24 @@ class AuthService {
     try {
       final prefs = await SharedPreferences.getInstance();
       
+      // ✅ NOVO: Biometria SEMPRE precisa de PIN
+      if ((authType == 'biometric' || authType == 'both') && (pin == null || pin.isEmpty)) {
+        // Se escolheu biometria mas não forneceu PIN, retornar false
+        return false;
+      }
+      
       // Salvar tipo de autenticação
       await prefs.setString(_authTypeKey, authType);
       await prefs.setBool(_securityEnabledKey, true);
       
-      // Salvar PIN se fornecido
+      // Salvar PIN se fornecido (agora obrigatório para biometria também)
       if (pin != null && pin.isNotEmpty) {
         final salt = _generateSalt();
         final hashedPin = _hashPin(pin, salt);
         await _secureStorage.write(key: _pinKey, value: hashedPin);
         await _secureStorage.write(key: _pinSaltKey, value: salt);
-      } else if (authType == 'pin' || authType == 'both') {
-        // Se o tipo é PIN ou Ambos, mas nenhum PIN foi fornecido, desabilitar segurança
+      } else if (authType == 'pin') {
+        // Só desabilita se for APENAS PIN sem PIN fornecido
         await disableSecurity();
         return false;
       }
@@ -164,7 +171,7 @@ class AuthService {
   static Future<bool> authenticateWithBiometric() async {
     try {
       final bool didAuthenticate = await _localAuth.authenticate(
-        localizedReason: 'Use sua digital ou rosto para acessar o app',
+        localizedReason: 'Use sua digital para acessar o app',
         options: const AuthenticationOptions(
           biometricOnly: true,
           stickyAuth: true,
@@ -252,6 +259,11 @@ class AuthService {
       default:
         return true; // Sem segurança
     }
+  }
+  // Verificar se tem PIN configurado
+  static Future<bool> hasPinConfigured() async {
+    final storedPin = await _secureStorage.read(key: _pinKey);
+    return storedPin != null;
   }
 
   // Desabilitar segurança
@@ -383,17 +395,17 @@ class AuthService {
     await prefs.setInt(_failAttemptsKey, newAttempts);
     
     // Lockout após 3 tentativas
-    if (newAttempts >= 3) {
+    if (newAttempts >= 5) {
       final lockoutDuration = _getLockoutDuration(newAttempts);
       final lockoutTime = DateTime.now().millisecondsSinceEpoch + lockoutDuration;
       await prefs.setInt(_lockoutTimeKey, lockoutTime);
     }
   }
 
-  static int _getLockoutDuration(int attempts) {
-    // Lockout progressivo mais suave: 30s, 2min, 5min, 10min
-    const durations = [30000, 120000, 300000, 600000]; // em milissegundos
-    final index = (attempts - 3).clamp(0, durations.length - 1);
+static int _getLockoutDuration(int attempts) {
+    // Lockout progressivo mais suave: 30s, 1min, 3min, 5min
+    const durations = [30000, 60000, 180000, 300000]; // em milissegundos
+    final index = (attempts - 5).clamp(0, durations.length - 1);
     return durations[index];
   }
 

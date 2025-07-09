@@ -241,17 +241,6 @@ void _changeThemeOptimized(bool isDark) {
 Widget _buildBackupSection(bool isDark) {
  return Column(
    children: [
-     Padding(
-       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-       child: Text(
-         'BACKUP',
-         style: TextStyle(
-           fontSize: 12,
-           fontWeight: FontWeight.bold,
-           color: isDark ? Colors.grey[400] : Colors.grey[600],
-         ),
-       ),
-     ),
      ListTile(
        leading: const Icon(Icons.file_upload),
        title: const Text('Exportar Backup'),

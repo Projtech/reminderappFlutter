@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
+import 'screens/auth_screen.dart';
 import 'services/notification_service.dart';
 import 'services/timer_service.dart';
 import 'services/consent_service.dart';
+import 'services/auth_service.dart';
 import 'widgets/whats_new_dialog.dart';
 
 Future<void> main() async {
@@ -137,7 +140,7 @@ class MyAppState extends State<MyApp> {
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: _themeMode,
-      home: const HomeScreen(),
+      home: const AuthWrapper(), // ✅ MUDANÇA: Trocado de HomeScreen para AuthWrapper
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -148,5 +151,169 @@ class MyAppState extends State<MyApp> {
       ],
       debugShowCheckedModeBanner: false,
     );
+  }
+}
+
+// ✅ NOVA CLASSE: AuthWrapper que verifica autenticação ANTES de mostrar conteúdo
+class AuthWrapper extends StatefulWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
+  bool _isCheckingAuth = true;
+  bool _isAppInBackground = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _checkInitialAuth();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _isAppInBackground = true;
+    } else if (state == AppLifecycleState.resumed && _isAppInBackground) {
+      _isAppInBackground = false;
+      _checkAuthOnResume();
+    }
+  }
+
+  Future<void> _checkInitialAuth() async {
+    try {
+      // Verificar se segurança está habilitada
+      final isSecurityEnabled = await AuthService.isSecurityEnabled();
+      
+      if (!isSecurityEnabled) {
+        setState(() {
+          _isCheckingAuth = false;
+        });
+        return;
+      }
+      
+      // Verificar se precisa autenticar
+      final needsAuth = await AuthService.needsAuthentication();
+      
+      if (needsAuth && mounted) {
+        // Mostrar tela de autenticação
+        final authenticated = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const AuthScreen(),
+            settings: const RouteSettings(name: '/auth'),
+          ),
+        );
+        
+        // Se não autenticou, fechar o app
+        if (authenticated != true && mounted) {
+          await Future.delayed(const Duration(milliseconds: 500));
+          SystemNavigator.pop();
+          return;
+        }
+      }
+      
+      // Autenticado ou não precisa, mostrar home
+      if (mounted) {
+        setState(() {
+          _isCheckingAuth = false;
+        });
+      }
+    } catch (e) {
+      // Em caso de erro, não exigir autenticação para não travar o app
+      if (mounted) {
+        setState(() {
+          _isCheckingAuth = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _checkAuthOnResume() async {
+    try {
+      final isSecurityEnabled = await AuthService.isSecurityEnabled();
+      if (!isSecurityEnabled) return;
+      
+      final needsAuth = await AuthService.needsAuthentication();
+      if (needsAuth && mounted) {
+        final authenticated = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const AuthScreen(),
+            settings: const RouteSettings(name: '/auth'),
+          ),
+        );
+        
+        if (authenticated != true && mounted) {
+          await Future.delayed(const Duration(milliseconds: 500));
+          SystemNavigator.pop();
+        }
+      }
+    } catch (e) {
+      // Error handled silently
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
+    // Enquanto verifica autenticação, mostrar loading seguro
+    if (_isCheckingAuth) {
+      return Scaffold(
+        backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      theme.primaryColor,
+                      theme.primaryColor.withValues(alpha: 0.7),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(50),
+                ),
+                child: const Icon(
+                  Icons.lock_outline,
+                  size: 50,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 30),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 20),
+              Text(
+                'Verificando segurança...',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: isDark ? Colors.white70 : Colors.black54,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    
+    // Se passou pela verificação, mostrar HomeScreen
+    return const HomeScreen();
   }
 }
