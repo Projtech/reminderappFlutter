@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import '../services/pix_suggestion_service.dart';
 import '../widgets/pix_suggestion_dialog.dart';
 import 'package:flutter/material.dart';
