@@ -1,6 +1,8 @@
 // Arquivo: lib/services/app_installer_service.dart
 // Correções nos métodos incompletos
 
+// ignore_for_file: use_build_context_synchronously
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;

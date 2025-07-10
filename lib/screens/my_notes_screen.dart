@@ -18,14 +18,13 @@ class MyNotesScreen extends StatefulWidget {
 class _MyNotesScreenState extends State<MyNotesScreen> {
   final NoteHelper _noteHelper = NoteHelper();
   final TextEditingController _searchController = TextEditingController();
-  // ✅ REMOVIDO: final BackupService _backupService = BackupService(); (não utilizado)
   List<Note> _notes = [];
   List<Note> _filteredNotes = [];
   bool _isLoading = true;
   bool _isSearching = false;
   late StreamSubscription<DataChangeEvent> _dataSubscription;
   late StreamSubscription<LoadingState> _loadingSubscription;
-  bool _isImporting = false; // ✅ ERRO 1: FALTAVA ESTA VARIÁVEL!
+  bool _isImporting = false;
 
   @override
   void initState() {
@@ -64,12 +63,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao carregar anotações: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      // Removido SnackBar conforme solicitado
     }
   }
 
@@ -108,7 +102,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
       if (state.operation == 'backup_import') {
         if (mounted) {
           setState(() {
-            _isImporting = state.isLoading; // ✅ ERRO 2: FALTAVA ESTA LINHA!
+            _isImporting = state.isLoading;
           });
         }
       }
@@ -224,7 +218,7 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
             ),
         ],
       ),
-      floatingActionButton: FloatingActionButton( // ✅ ERRO 3: FALTAVA O FAB!
+      floatingActionButton: FloatingActionButton(
         onPressed: () async {
           final result = await Navigator.push(
             context,
@@ -364,38 +358,14 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
     );
   }
 
-  // ✅ CORRIGIDO: Usar restoreNote() ao invés de re-inserir
   Future<void> _deleteNote(Note note) async {
     try {
       await _noteHelper.deleteNote(note.id!);
       await _loadNotes();
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Anotação movida para lixeira'),
-            backgroundColor: Colors.orange,
-            action: SnackBarAction(
-              label: 'Desfazer',
-              onPressed: () async {
-                // ✅ CORRIGIDO: Usar restoreNote() ao invés de re-inserir
-                await _noteHelper.restoreNote(note.id!);
-                await _loadNotes();
-              },
-            ),
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
+      // Removido SnackBar conforme solicitado
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao excluir anotação: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      // Removido SnackBar conforme solicitado
     }
   }
 
@@ -404,29 +374,12 @@ class _MyNotesScreenState extends State<MyNotesScreen> {
       final updatedNote = note.copyWith(isPinned: !note.isPinned);
       await _noteHelper.updateNote(updatedNote);
       await _loadNotes();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                'Anotação "${note.title}" ${updatedNote.isPinned ? 'fixada' : 'desafixada'}'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+      // Removido SnackBar conforme solicitado
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                'Erro ao ${note.isPinned ? 'desafixar' : 'fixar'} anotação: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      // Removido SnackBar conforme solicitado
     }
   }
 
-  // ✅ CORRIGIDO: Diálogo atualizado para lixeira
   Future<bool> _showDeleteConfirmation(Note note) async {
     return await showDialog(
           context: context,

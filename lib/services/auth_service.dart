@@ -1,7 +1,5 @@
-import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
@@ -16,35 +14,11 @@ class AuthService {
   static const String _pinKey = 'app_security_pin';
   static const String _pinSaltKey = 'app_security_pin_salt';
   static const String _securityEnabledKey = 'security_enabled';
-  static const String _authTypeKey = 'auth_type'; // 'biometric', 'pin', 'both'
+  static const String _authTypeKey = 'auth_type'; // 'pin'
   static const String _failAttemptsKey = 'failed_attempts';
   static const String _lockoutTimeKey = 'lockout_time';
   static const String _lastAuthKey = 'last_auth_time';
   static const String _timeoutMinutesKey = 'auth_timeout_minutes';
-  
-  static final LocalAuthentication _localAuth = LocalAuthentication();
-  
-  // Verificar se biometria está disponível
-  static Future<bool> isBiometricAvailable() async {
-    try {
-      final bool isAvailable = await _localAuth.canCheckBiometrics;
-      final bool isDeviceSupported = await _localAuth.isDeviceSupported();
-      final List<BiometricType> availableBiometrics = await _localAuth.getAvailableBiometrics();
-      
-      // Adicionado logs para depuração
-      print('isBiometricAvailable: isAvailable = $isAvailable');
-      print('isBiometricAvailable: isDeviceSupported = $isDeviceSupported');
-      print('isBiometricAvailable: availableBiometrics = ${availableBiometrics.map((e) => e.toString()).join(', ')}');
-
-      return isAvailable && isDeviceSupported && availableBiometrics.contains(BiometricType.fingerprint);
-    } on PlatformException catch (e) {
-      print('Erro ao verificar biometria (PlatformException): ${e.code} - ${e.message}');
-      return false;
-    } catch (e) {
-      print('Erro genérico ao verificar biometria: ${e.toString()}');
-      return false;
-    }
-  }
 
   // Verificar se segurança está habilitada
   static Future<bool> isSecurityEnabled() async {
@@ -52,11 +26,11 @@ class AuthService {
     final isEnabled = prefs.getBool(_securityEnabledKey) ?? false;
     if (!isEnabled) return false;
 
-    // Adição: Se o tipo de autenticação é PIN ou Ambos, verificar se o PIN está realmente armazenado
+    // Verificar se o PIN está realmente armazenado
     final authType = prefs.getString(_authTypeKey) ?? 'none';
-    if (authType == 'pin' || authType == 'both') {
+    if (authType == 'pin') {
       final storedPin = await _secureStorage.read(key: _pinKey);
-      return storedPin != null; // Só está habilitado se o PIN existir
+      return storedPin != null;
     }
     return isEnabled;
   }
@@ -66,19 +40,13 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     final authType = prefs.getString(_authTypeKey) ?? 'none';
 
-    // Adição: Se o tipo é PIN ou Ambos, verificar se o PIN está realmente armazenado
-    if (authType == 'pin' || authType == 'both') {
+    // Verificar se o PIN está realmente armazenado
+    if (authType == 'pin') {
       final storedPin = await _secureStorage.read(key: _pinKey);
       if (storedPin == null) {
-        // Se o PIN não existe, mas o tipo está configurado, redefinir para 'none' ou 'biometric'
-        if (authType == 'pin') {
-          await prefs.setString(_authTypeKey, 'none');
-          await prefs.setBool(_securityEnabledKey, false);
-          return 'none';
-        } else if (authType == 'both') {
-          await prefs.setString(_authTypeKey, 'biometric');
-          return 'biometric';
-        }
+        await prefs.setString(_authTypeKey, 'none');
+        await prefs.setBool(_securityEnabledKey, false);
+        return 'none';
       }
     }
     return authType;
@@ -127,7 +95,6 @@ class AuthService {
   }
 
   // Configurar segurança
-// Configurar segurança
   static Future<bool> setupSecurity({
     required String authType,
     String? pin,
@@ -135,9 +102,9 @@ class AuthService {
     try {
       final prefs = await SharedPreferences.getInstance();
       
-      // ✅ NOVO: Biometria SEMPRE precisa de PIN
-      if ((authType == 'biometric' || authType == 'both') && (pin == null || pin.isEmpty)) {
-        // Se escolheu biometria mas não forneceu PIN, retornar false
+      // Verificar se PIN foi fornecido
+      if (authType == 'pin' && (pin == null || pin.isEmpty)) {
+        await disableSecurity();
         return false;
       }
       
@@ -145,16 +112,12 @@ class AuthService {
       await prefs.setString(_authTypeKey, authType);
       await prefs.setBool(_securityEnabledKey, true);
       
-      // Salvar PIN se fornecido (agora obrigatório para biometria também)
+      // Salvar PIN
       if (pin != null && pin.isNotEmpty) {
         final salt = _generateSalt();
         final hashedPin = _hashPin(pin, salt);
         await _secureStorage.write(key: _pinKey, value: hashedPin);
         await _secureStorage.write(key: _pinSaltKey, value: salt);
-      } else if (authType == 'pin') {
-        // Só desabilita se for APENAS PIN sem PIN fornecido
-        await disableSecurity();
-        return false;
       }
       
       // Resetar tentativas e lockout
@@ -163,59 +126,6 @@ class AuthService {
       
       return true;
     } catch (e) {
-      return false;
-    }
-  }
-
-  // Autenticar com biometria
-  static Future<bool> authenticateWithBiometric() async {
-    try {
-      final bool didAuthenticate = await _localAuth.authenticate(
-        localizedReason: 'Use sua digital para acessar o app',
-        options: const AuthenticationOptions(
-          biometricOnly: true,
-          stickyAuth: true,
-        ),
-      );
-      
-      if (didAuthenticate) {
-        await _recordSuccessfulAuth();
-      }
-      
-      return didAuthenticate;
-    } on PlatformException catch (e) {
-      String errorMessage;
-      switch (e.code) {
-        case 'NotAvailable':
-          errorMessage = 'Biometria não disponível neste dispositivo.';
-          break;
-        case 'NotEnrolled':
-          errorMessage = 'Nenhuma biometria cadastrada. Cadastre uma em suas configurações.';
-          break;
-        case 'PasscodeNotSet':
-          errorMessage = 'PIN/Senha do dispositivo não configurado. Configure um para usar biometria.';
-          break;
-        case 'LockedOut':
-          errorMessage = 'Biometria bloqueada devido a muitas tentativas. Tente novamente mais tarde.';
-          break;
-        case 'PermanentlyLockedOut':
-          errorMessage = 'Biometria permanentemente bloqueada. Pode ser necessário reiniciar o dispositivo ou reconfigurar.';
-          break;
-        case 'UserCancel':
-          errorMessage = 'Autenticação biométrica cancelada pelo usuário.';
-          break;
-        case 'UserFallback':
-          errorMessage = 'Usuário escolheu usar outro método de autenticação.';
-          break;
-        default:
-          errorMessage = 'Erro desconhecido na biometria: ${e.message}';
-          break;
-      }
-      // Em um app real, você pode querer mostrar essa mensagem ao usuário.
-      // print('BIOMETRIC_AUTH_ERROR: $errorMessage'); // Para debug
-      return false;
-    } catch (e) {
-      // print('BIOMETRIC_AUTH_GENERIC_ERROR: ${e.toString()}'); // Para debug
       return false;
     }
   }
@@ -248,18 +158,14 @@ class AuthService {
     final authType = await getAuthType();
     
     switch (authType) {
-      case 'biometric':
-        return await authenticateWithBiometric();
       case 'pin':
         // PIN será solicitado na tela
         return false; // Retorna false para que a tela de PIN seja exibida
-      case 'both':
-        // Usuário pode escolher na tela
-        return false; // Retorna false para que a tela de escolha seja exibida
       default:
         return true; // Sem segurança
     }
   }
+
   // Verificar se tem PIN configurado
   static Future<bool> hasPinConfigured() async {
     final storedPin = await _secureStorage.read(key: _pinKey);
@@ -335,14 +241,9 @@ class AuthService {
       await _secureStorage.delete(key: _pinKey);
       await _secureStorage.delete(key: _pinSaltKey);
       
-      // Se o tipo de autenticação era 'pin' ou 'both', redefinir para 'none' ou 'biometric' respectivamente
-      final currentAuthType = await getAuthType();
-      if (currentAuthType == 'pin') {
-        await prefs.setString(_authTypeKey, 'none');
-        await prefs.setBool(_securityEnabledKey, false);
-      } else if (currentAuthType == 'both') {
-        await prefs.setString(_authTypeKey, 'biometric');
-      }
+      // Desabilitar segurança
+      await prefs.setString(_authTypeKey, 'none');
+      await prefs.setBool(_securityEnabledKey, false);
       
       // Resetar tentativas falhas e lockout para o PIN
       await prefs.setInt(_failAttemptsKey, 0);
@@ -394,7 +295,7 @@ class AuthService {
     
     await prefs.setInt(_failAttemptsKey, newAttempts);
     
-    // Lockout após 3 tentativas
+    // Lockout após 5 tentativas
     if (newAttempts >= 5) {
       final lockoutDuration = _getLockoutDuration(newAttempts);
       final lockoutTime = DateTime.now().millisecondsSinceEpoch + lockoutDuration;
@@ -402,7 +303,7 @@ class AuthService {
     }
   }
 
-static int _getLockoutDuration(int attempts) {
+  static int _getLockoutDuration(int attempts) {
     // Lockout progressivo mais suave: 30s, 1min, 3min, 5min
     const durations = [30000, 60000, 180000, 300000]; // em milissegundos
     final index = (attempts - 5).clamp(0, durations.length - 1);
@@ -414,12 +315,4 @@ static int _getLockoutDuration(int attempts) {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt(_failAttemptsKey) ?? 0;
   }
-
-  // Logs para debug (apenas em desenvolvimento)
-  // static Future<void> _logSecurityEvent(String event, {Map<String, dynamic>? details}) async {
-  //   // Em produção, remover ou enviar para analytics
-  //   final timestamp = DateTime.now().toIso8601String();
-  //   print('SECURITY_LOG [$timestamp]: $event ${details ?? ''}');
-  // }
 }
-

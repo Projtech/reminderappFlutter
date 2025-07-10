@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../widgets/pin_setup_dialog.dart';
@@ -13,7 +12,6 @@ class SecuritySettingsScreen extends StatefulWidget {
 class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   bool _isSecurityEnabled = false;
   String _authType = 'none';
-  bool _biometricAvailable = false;
   bool _isLoading = true;
   int _timeoutMinutes = 5;
 
@@ -28,14 +26,12 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
 
     final securityEnabled = await AuthService.isSecurityEnabled();
     final authType = await AuthService.getAuthType();
-    final biometricAvailable = await AuthService.isBiometricAvailable();
     final timeoutMinutes = await AuthService.getAuthTimeoutMinutes();
 
     if (mounted) {
       setState(() {
         _isSecurityEnabled = securityEnabled;
         _authType = authType;
-        _biometricAvailable = biometricAvailable;
         _timeoutMinutes = timeoutMinutes;
         _isLoading = false;
       });
@@ -57,12 +53,11 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
             _isSecurityEnabled = false;
             _authType = 'none';
           });
-          _showMessage('Segurança desabilitada', Colors.orange);
         }
       }
     } else {
-      // Mostrar opções para habilitar
-      _showSetupOptions();
+      // Configurar PIN diretamente
+      _setupPin();
     }
   }
 
@@ -88,80 +83,6 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     );
   }
 
-  void _showSetupOptions() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('🔐 Configurar Segurança'),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Como você deseja proteger seu app?'),
-            SizedBox(height: 8),
-            Text(
-              '⚠️ Biometria sempre requer PIN como backup',
-              style: TextStyle(fontSize: 12, color: Colors.orange),
-            ),
-          ],
-        ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          if (_biometricAvailable)
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _setupBiometric();
-              },
-              child: const Text('Biometria'),
-            ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _setupPin();
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-            child: const Text('PIN'),
-          ),
-          if (_biometricAvailable)
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _setupBoth();
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-              child: const Text('Ambos'),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _setupBiometric() async {
-    // ✅ NOVO: Sempre pedir PIN primeiro
-    final pin = await PinSetupDialog.show(context);
-    if (pin == null) {
-      _showMessage('PIN é obrigatório para usar biometria', Colors.orange);
-      return;
-    }
-
-    final success =
-        await AuthService.setupSecurity(authType: 'biometric', pin: pin);
-    if (success && mounted) {
-      setState(() {
-        _isSecurityEnabled = true;
-        _authType = 'biometric';
-      });
-      _showMessage('Biometria + PIN configurados!', Colors.green);
-    } else {
-      _showMessage('Erro ao configurar biometria', Colors.red);
-    }
-  }
-
   Future<void> _setupPin() async {
     final pin = await PinSetupDialog.show(context);
     if (pin != null) {
@@ -172,26 +93,6 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
           _isSecurityEnabled = true;
           _authType = 'pin';
         });
-        _showMessage('PIN configurado!', Colors.green);
-      } else {
-        _showMessage('Erro ao configurar PIN', Colors.red);
-      }
-    }
-  }
-
-  Future<void> _setupBoth() async {
-    final pin = await PinSetupDialog.show(context);
-    if (pin != null) {
-      final success =
-          await AuthService.setupSecurity(authType: 'both', pin: pin);
-      if (success && mounted) {
-        setState(() {
-          _isSecurityEnabled = true;
-          _authType = 'both';
-        });
-        _showMessage('Biometria + PIN configurados!', Colors.green);
-      } else {
-        _showMessage('Erro ao configurar segurança', Colors.red);
       }
     }
   }
@@ -201,7 +102,6 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     setState(() {
       _timeoutMinutes = minutes;
     });
-    _showMessage('Timeout atualizado para $minutes minutos', Colors.blue);
   }
 
   void _showTimeoutOptions() {
@@ -232,64 +132,11 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     );
   }
 
-  Future<void> _resetForTesting() async {
-    final confirm = await _showConfirmDialog(
-      'Reset para Testes?',
-      'Isso removerá toda a segurança configurada. Use apenas para testes!',
-    );
 
-    if (confirm == true) {
-      final success = await AuthService.resetSecurityForTesting();
-      if (success && mounted) {
-        setState(() {
-          _isSecurityEnabled = false;
-          _authType = 'none';
-        });
-        _showMessage('Segurança resetada para testes!', Colors.orange);
-      } else {
-        _showMessage('Erro ao resetar segurança', Colors.red);
-      }
-    }
-  }
-
-  Future<void> _resetPinOnly() async {
-    final confirm = await _showConfirmDialog(
-      'Resetar PIN?',
-      'Isso removerá apenas o PIN configurado. Tem certeza?',
-    );
-
-    if (confirm == true) {
-      final success = await AuthService.resetPinOnly();
-      if (success && mounted) {
-        setState(() {
-          _loadSettings(); // Recarrega as configurações para refletir a mudança
-        });
-        _showMessage('PIN resetado com sucesso!', Colors.orange);
-      } else {
-        _showMessage('Erro ao resetar PIN', Colors.red);
-      }
-    }
-  }
-
-  void _showMessage(String message, Color color) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-String _getAuthTypeDescription() {
+  String _getAuthTypeDescription() {
     switch (_authType) {
-      case 'biometric':
-        return 'Biometria com PIN de backup';
       case 'pin':
-        return 'Apenas PIN de 4 dígitos';
-      case 'both':
-        return 'Biometria + PIN (escolha na hora)';
+        return 'PIN de 4 dígitos';
       default:
         return 'Desabilitada';
     }
@@ -375,7 +222,7 @@ String _getAuthTypeDescription() {
                   child: SwitchListTile(
                     title: const Text('Habilitar Segurança'),
                     subtitle:
-                        const Text('Exigir autenticação para abrir o app'),
+                        const Text('Exigir PIN para abrir o app'),
                     value: _isSecurityEnabled,
                     onChanged: _toggleSecurity,
                     secondary: const Icon(Icons.security),
@@ -385,14 +232,14 @@ String _getAuthTypeDescription() {
                 if (_isSecurityEnabled) ...[
                   const SizedBox(height: 16),
 
-                  // Alterar Método
+                  // Alterar PIN
                   Card(
                     child: ListTile(
-                      title: const Text('Alterar Método'),
-                      subtitle: Text('Atual: ${_getAuthTypeDescription()}'),
+                      title: const Text('Alterar PIN'),
+                      subtitle: const Text('Configurar novo PIN de 4 dígitos'),
                       leading: const Icon(Icons.edit),
                       trailing: const Icon(Icons.arrow_forward_ios),
-                      onTap: _showSetupOptions,
+                      onTap: _setupPin,
                     ),
                   ),
 
@@ -412,54 +259,13 @@ String _getAuthTypeDescription() {
 
                   const SizedBox(height: 8),
 
-                  // Botão de Reset de PIN
-                  if (_authType == 'pin' || _authType == 'both')
-                    Card(
-                      color: Colors.orange.withOpacity(0.1),
-                      child: ListTile(
-                        title: const Text(
-                          'Resetar PIN',
-                          style: TextStyle(
-                              color: Colors.orange,
-                              fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: const Text('Remove apenas o PIN configurado'),
-                        leading:
-                            const Icon(Icons.vpn_key_off, color: Colors.orange),
-                        trailing: const Icon(Icons.arrow_forward_ios,
-                            color: Colors.orange),
-                        onTap: _resetPinOnly,
-                      ),
-                    ),
-
-                  const SizedBox(height: 8),
-
-                  // Botão de Reset para Testes
-                  if (kDebugMode)
-                    Card(
-                      color: Colors.red.withOpacity(0.1),
-                      child: ListTile(
-                        title: const Text(
-                          'Reset para Testes',
-                          style: TextStyle(
-                              color: Colors.red, fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: const Text(
-                            'Remove PIN/Biometria (só para desenvolvimento)'),
-                        leading:
-                            const Icon(Icons.delete_forever, color: Colors.red),
-                        trailing: const Icon(Icons.arrow_forward_ios,
-                            color: Colors.red),
-                        onTap: _resetForTesting,
-                      ),
-                    ),
                 ],
 
                 const SizedBox(height: 24),
 
                 // Informações
                 Card(
-                  color: Colors.blue.withOpacity(0.1),
+                  color: Colors.blue.withValues(alpha: 0.1),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
@@ -482,8 +288,6 @@ String _getAuthTypeDescription() {
                             '• A autenticação é solicitada ao abrir o app'),
                         const Text(
                             '• Após 5 tentativas erradas, o app é temporariamente bloqueado'),
-                        const Text(
-                            '• Biometria sempre requer PIN como método alternativo'),
                         const Text(
                             '• Seus dados ficam protegidos apenas no seu dispositivo'),
                         const Text(
